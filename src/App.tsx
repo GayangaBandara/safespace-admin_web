@@ -19,10 +19,17 @@ function App() {
       return;
     }
 
+    // Initial profile fetch
     fetchAdminProfile();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
-      fetchAdminProfile();
+    // Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_IN') {
+        fetchAdminProfile();
+      } else if (event === 'SIGNED_OUT') {
+        // Ensure admin state is cleared on sign out
+        useAdminStore.setState({ admin: null, loading: false });
+      }
     });
 
     return () => subscription.unsubscribe();
@@ -55,19 +62,24 @@ function App() {
           element={!admin ? <SignUp /> : <Navigate to="/dashboard" replace />}
         />
 
-        {/* Protected routes - use a layout with nested child routes */}
-        <Route
-          path="/"
-          element={admin ? <Layout /> : <Navigate to="/login" replace />}
-        >
-          <Route index element={<Navigate to="dashboard" replace />} />
-          <Route path="dashboard" element={<Dashboard />} />
-          <Route path="users" element={<div>Users</div>} />
-          <Route path="doctors" element={<div>Doctors</div>} />
-          <Route path="reports" element={<div>Reports</div>} />
-          <Route path="analytics" element={<div>Analytics</div>} />
-          <Route path="settings" element={<div>Settings</div>} />
-        </Route>
+        {/* Protected routes */}
+        {admin ? (
+          <Route path="/" element={<Layout />}>
+            <Route index element={<Navigate to="/dashboard" replace />} />
+            <Route path="dashboard" element={<Dashboard />} />
+            <Route path="users" element={<div>Users Page Coming Soon</div>} />
+            <Route path="doctors" element={<div>Doctors Page Coming Soon</div>} />
+            <Route path="reports" element={<div>Reports Page Coming Soon</div>} />
+            <Route path="analytics" element={<div>Analytics Page Coming Soon</div>} />
+            <Route path="settings" element={<div>Settings Page Coming Soon</div>} />
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          </Route>
+        ) : (
+          <Route
+            path="*"
+            element={<Navigate to="/login" replace />}
+          />
+        )}
       </Routes>
     </Router>
   );

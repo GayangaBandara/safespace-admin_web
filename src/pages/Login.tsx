@@ -18,8 +18,9 @@ const Login = () => {
     }
   }, []);
 
-  // Redirect to dashboard when admin is available
-  const { admin } = useAdminStore();
+  const { admin, login } = useAdminStore();
+
+  // Immediately redirect if we already have an admin session
   useEffect(() => {
     if (admin) {
       navigate('/dashboard', { replace: true });
@@ -37,13 +38,14 @@ const Login = () => {
         return;
       }
 
-      // Perform login; the effect above will redirect once `admin` is set
-      await useAdminStore.getState().login(email, password);
+      // Use the login from the store hook instead of getState
+      await login(email, password);
+
+      // Explicitly navigate after successful login
+      navigate('/dashboard', { replace: true });
     } catch (error) {
       console.error('Login error:', error);
       setError(error instanceof Error ? error.message : 'An error occurred');
-      
-      // Clear password on error for security
       setPassword('');
     } finally {
       setLoading(false);

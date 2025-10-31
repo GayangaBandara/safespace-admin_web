@@ -130,23 +130,44 @@ export const useAdminStore = create<AdminState>((set) => ({
 
   fetchAdminProfile: async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      set({ loading: true, error: null });
+      
+      const session = await supabase.auth.getSession();
+      const user = session?.data?.session?.user;
 
       if (!user) {
         set({ admin: null, loading: false });
         return;
       }
 
-      const { data: admin } = await supabase
+      const { data: admin, error: adminError } = await supabase
         .from('admins')
         .select('*')
         .eq('id', user.id)
         .single();
 
-      set({ admin, loading: false });
+      if (adminError) {
+        if (adminError.code === 'PGRST116') {
+          set({ admin: null, loading: false });
+          return;
+        }
+        console.error('Error fetching admin profile:', adminError);
+        set({ loading: false, error: adminError.message });
+        return;
+      }
+
+      if (!admin) {
+        set({ admin: null, loading: false });
+        return;
+      }
+
+      set({ admin, loading: false, error: null });
     } catch (error) {
       console.error('Error fetching admin profile:', error);
-      set({ admin: null, loading: false });
+      set({ 
+        loading: false,
+        error: error instanceof Error ? error.message : 'Failed to fetch profile'
+      });
     }
   },
 }));
