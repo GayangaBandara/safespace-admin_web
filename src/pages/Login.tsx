@@ -18,14 +18,14 @@ const Login = () => {
     }
   }, []);
 
-  const { admin, login } = useAdminStore();
+  const { admin, login, initialized } = useAdminStore();
 
   // Immediately redirect if we already have an admin session
   useEffect(() => {
-    if (admin) {
+    if (initialized && admin) {
       navigate('/dashboard', { replace: true });
     }
-  }, [admin, navigate]);
+  }, [admin, navigate, initialized]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

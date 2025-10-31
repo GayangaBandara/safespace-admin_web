@@ -8,210 +8,200 @@ interface AdminState {
   loading: boolean;
   error: string | null;
   initialized: boolean;
-  clearError: () => void;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   signup: (email: string, password: string, username: string) => Promise<void>;
   fetchAdminProfile: () => Promise<void>;
+  clearError: () => void;
 }
 
 export const useAdminStore = create<AdminState>()(
   persist(
     (set) => ({
       admin: null,
-      loading: true,
+      loading: false,
       error: null,
       initialized: false,
+
       clearError: () => set({ error: null }),
 
-  login: async (email: string, password: string) => {
-    try {
-      console.log('Starting login process for:', email);
-      set({ loading: true, error: null });
-      
-      const { data: authData, error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      login: async (email: string, password: string) => {
+        try {
+          set({ loading: true, error: null });
 
-      console.log('Auth response:', { authData, signInError });
+          // First sign in with Supabase Auth
+          const { data: authData, error: signInError } = await supabase.auth.signInWithPassword({
+            email,
+            password,
+          });
 
-      if (signInError) {
-        console.error('Sign in error:', signInError);
-        throw new Error(signInError.message);
-      }
+          if (signInError) throw signInError;
+          if (!authData.user) throw new Error('Authentication failed');
 
-      if (!authData.user) {
-        console.error('No user data in auth response');
-        throw new Error('No user data returned from authentication');
-      }
+          // Then fetch the admin profile
+          const { data: admin, error: adminError } = await supabase
+            .from('admins')
+            .select('*')
+            .eq('id', authData.user.id)
+            .single();
 
-      console.log('Fetching admin profile for user:', authData.user.id);
-      const { data: admin, error: adminError } = await supabase
-        .from('admins')
-        .select('*')
-        .eq('id', authData.user.id)
-        .single();
+          if (adminError) throw adminError;
+          if (!admin) throw new Error('Admin profile not found');
 
-      console.log('Admin profile response:', { admin, adminError });
-
-      if (adminError) {
-        console.error('Admin fetch error:', adminError);
-        if (adminError.code === 'PGRST116') {
-          throw new Error('Account not found. Please contact system administrator.');
+          // Update the store with the admin data
+          set({
+            admin,
+            loading: false,
+            error: null,
+            initialized: true
+          });
+        } catch (error) {
+          set({
+            admin: null,
+            loading: false,
+            error: error instanceof Error ? error.message : 'Login failed',
+            initialized: true
+          });
+          throw error;
         }
-        throw adminError;
-      }
+      },
 
-      if (!admin) {
-        console.error('No admin record found');
-        throw new Error('No admin account found');
-      }
+      logout: async () => {
+        try {
+          set({ loading: true, error: null });
+          const { error } = await supabase.auth.signOut();
+          if (error) throw error;
+          set({
+            admin: null,
+            loading: false,
+            error: null,
+            initialized: true
+          });
+        } catch (error) {
+          set({
+            loading: false,
+            error: error instanceof Error ? error.message : 'Logout failed',
+            initialized: true
+          });
+          throw error;
+        }
+      },
 
-      console.log('Login successful, setting admin state:', admin);
-      set({ admin, loading: false, error: null, initialized: true });
-    } catch (error) {
-      set({ 
-        admin: null, 
-        loading: false, 
-        error: error instanceof Error ? error.message : 'An error occurred',
-        initialized: true 
-      });
-      throw error;
-    }
-  },
+      signup: async (email: string, password: string, username: string) => {
+        try {
+          set({ loading: true, error: null });
 
-  logout: async () => {
-    try {
-      set({ loading: true, error: null });
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
-      set({ admin: null, loading: false, error: null, initialized: true });
-    } catch (error) {
-      set({
-        loading: false,
-        error: error instanceof Error ? error.message : 'Logout failed',
-        initialized: true
-      });
-      throw error;
-    }
-  },
+          const { data: authData, error: signUpError } = await supabase.auth.signUp({
+            email,
+            password,
+            options: {
+              data: {
+                full_name: username
+              }
+            }
+          });
 
-  signup: async (email: string, password: string, username: string) => {
-    try {
-      set({ loading: true, error: null });
+          if (signUpError) throw signUpError;
+          if (!authData.user?.id) throw new Error('Signup failed');
 
-      // First create the auth user
-      const { data: authData, error: signUpError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            username,
-            full_name: username
+          const { data: admin, error: adminError } = await (supabase
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            .from('admins') as any)
+            .insert({
+              id: authData.user.id,
+              email,
+              full_name: username,
+              role: 'pending'
+            })
+            .select()
+            .single();
+
+          if (adminError) throw adminError;
+          if (!admin) throw new Error('Failed to create admin profile');
+
+          set({
+            admin,
+            loading: false,
+            error: null,
+            initialized: true
+          });
+        } catch (error) {
+          set({
+            admin: null,
+            loading: false,
+            error: error instanceof Error ? error.message : 'Signup failed',
+            initialized: true
+          });
+          throw error;
+        }
+      },
+
+      fetchAdminProfile: async () => {
+        try {
+          set({ loading: true, error: null });
+
+          const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+          if (sessionError) throw sessionError;
+
+          if (!session?.user) {
+            set({
+              admin: null,
+              loading: false,
+              initialized: true
+            });
+            return;
           }
+
+          const { data: admin, error: adminError } = await supabase
+            .from('admins')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
+
+          if (adminError) {
+            if (adminError.code === 'PGRST116') {
+              set({
+                admin: null,
+                loading: false,
+                initialized: true
+              });
+              return;
+            }
+            throw adminError;
+          }
+
+          if (!admin) {
+            set({
+              admin: null,
+              loading: false,
+              initialized: true
+            });
+            return;
+          }
+
+          set({
+            admin,
+            loading: false,
+            error: null,
+            initialized: true
+          });
+        } catch (error) {
+          set({
+            loading: false,
+            error: error instanceof Error ? error.message : 'Failed to fetch profile',
+            initialized: true
+          });
         }
-      });
-
-      if (signUpError) {
-        throw new Error(signUpError.message);
-      }
-
-      if (!authData.user?.id) {
-        throw new Error('No user ID returned from signup');
-      }
-
-      // Then create the admin record
-      const { data: admin, error: adminError } = await (supabase
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .from('admins') as any)
-        .insert({
-          id: authData.user.id,
-          email,
-          full_name: username,
-          role: 'pending'
-        })
-        .select()
-        .single();
-
-      if (adminError) {
-        throw new Error(`Failed to create admin profile: ${adminError.message}`);
-      }
-
-      set({ admin, loading: false, error: null, initialized: true });
-    } catch (error) {
-      set({
-        admin: null,
-        loading: false,
-        error: error instanceof Error ? error.message : 'An error occurred',
-        initialized: true
-      });
-      throw error;
-    }
-  },
-
-  fetchAdminProfile: async () => {
-    try {
-      console.log('Fetching admin profile...');
-      set({ loading: true, error: null });
-      
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      console.log('Session check:', { session, sessionError });
-
-      if (sessionError) {
-        console.error('Session error:', sessionError);
-        throw sessionError;
-      }
-
-      if (!session?.user) {
-        console.log('No active session found');
-        set({ admin: null, loading: false, initialized: true });
-        return;
-      }
-
-      console.log('Found active session for user:', session.user.id);
-      const { data: admin, error: adminError } = await supabase
-        .from('admins')
-        .select('*')
-        .eq('id', session.user.id)
-        .single();
-
-      console.log('Admin profile fetch result:', { admin, adminError });
-
-      if (adminError) {
-        console.error('Admin fetch error:', adminError);
-        if (adminError.code === 'PGRST116') {
-          set({ admin: null, loading: false, initialized: true });
-          return;
-        }
-        set({ loading: false, error: adminError.message, initialized: true });
-        return;
-      }
-
-      if (!admin) {
-        console.log('No admin record found');
-        set({ admin: null, loading: false, initialized: true });
-        return;
-      }
-
-      console.log('Setting admin state:', admin);
-      set({ admin, loading: false, error: null, initialized: true });
-    } catch (error) {
-      console.error('Error fetching admin profile:', error);
-      set({ 
-        loading: false,
-        error: error instanceof Error ? error.message : 'Failed to fetch profile',
-        initialized: true
-      });
-    }
-  },
+      },
     }),
     {
       name: 'admin-storage',
-      storage: createJSONStorage(() => sessionStorage),
-      partialize: (state) => ({ 
+      storage: createJSONStorage(() => localStorage),
+      partialize: (state) => ({
         admin: state.admin,
-        initialized: state.initialized
+        initialized: state.initialized,
+        loading: state.loading,
+        error: state.error
       })
     }
   )

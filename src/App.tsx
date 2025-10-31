@@ -10,31 +10,55 @@ import { TestConnection } from './components/TestConnection';
 import checkEnvironment from './utils/checkEnv';
 
 function App() {
-  const { admin, loading, initialized } = useAdminStore();
+  const { admin, loading, initialized, fetchAdminProfile } = useAdminStore();
 
   useEffect(() => {
-    // Check environment variables first
-    if (!checkEnvironment()) {
-      console.error('Please fix environment variables before continuing');
-      return;
+    async function initializeApp() {
+      // Check environment variables first
+      if (!checkEnvironment()) {
+        console.error('Please fix environment variables before continuing');
+        return;
+      }
+
+      try {
+        // Get initial session
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) throw sessionError;
+
+        if (session?.user) {
+          // If we have a session but no admin data, fetch the profile
+          if (!admin) {
+            console.log('Found session, fetching admin profile...');
+            await fetchAdminProfile();
+          }
+        } else {
+          // No session, just mark as initialized
+          useAdminStore.setState({ initialized: true, loading: false });
+        }
+      } catch (error) {
+        console.error('Initialization error:', error);
+        useAdminStore.setState({ initialized: true, loading: false });
+      }
     }
 
-    // Initialize store if needed
     if (!initialized) {
-      useAdminStore.setState({ initialized: true, loading: false });
+      initializeApp();
     }
 
     // Listen for auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('Auth state changed:', event);
       if (event === 'SIGNED_OUT') {
         console.log('User signed out, clearing state...');
         useAdminStore.setState({ admin: null, loading: false, initialized: true });
+      } else if (event === 'SIGNED_IN' && session) {
+        console.log('User signed in, fetching profile...');
+        await fetchAdminProfile();
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [initialized]);
+  }, [initialized, fetchAdminProfile, admin]);
 
   if (loading || !initialized) {
     return (
