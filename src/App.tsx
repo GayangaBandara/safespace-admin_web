@@ -10,7 +10,7 @@ import { TestConnection } from './components/TestConnection';
 import checkEnvironment from './utils/checkEnv';
 
 function App() {
-  const { admin, loading, fetchAdminProfile } = useAdminStore();
+  const { admin, loading, initialized } = useAdminStore();
 
   useEffect(() => {
     // Check environment variables first
@@ -19,23 +19,24 @@ function App() {
       return;
     }
 
-    // Initial profile fetch
-    fetchAdminProfile();
+    // Initialize store if needed
+    if (!initialized) {
+      useAdminStore.setState({ initialized: true, loading: false });
+    }
 
     // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'SIGNED_IN') {
-        fetchAdminProfile();
-      } else if (event === 'SIGNED_OUT') {
-        // Ensure admin state is cleared on sign out
-        useAdminStore.setState({ admin: null, loading: false });
+      console.log('Auth state changed:', event);
+      if (event === 'SIGNED_OUT') {
+        console.log('User signed out, clearing state...');
+        useAdminStore.setState({ admin: null, loading: false, initialized: true });
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [fetchAdminProfile]);
+  }, [initialized]);
 
-  if (loading) {
+  if (loading || !initialized) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gradient-bg">
         <div className="text-center">

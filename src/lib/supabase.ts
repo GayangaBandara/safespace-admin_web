@@ -18,12 +18,17 @@ export const supabase = createClient<Database>(
     auth: {
       persistSession: true,
       autoRefreshToken: true,
-      detectSessionInUrl: true
+      detectSessionInUrl: true,
+      storageKey: 'safespace-admin-auth',
+      storage: window.sessionStorage
     },
     global: {
       headers: {
         'x-application-name': 'safespace-admin'
       }
+    },
+    db: {
+      schema: 'public'
     }
   }
 );

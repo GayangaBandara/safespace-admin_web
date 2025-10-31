@@ -38,10 +38,16 @@ const Login = () => {
         return;
       }
 
-      // Use the login from the store hook instead of getState
+      console.log('Attempting login for:', email);
       await login(email, password);
+      console.log('Login successful');
 
-      // Explicitly navigate after successful login
+      // Reset form
+      setEmail('');
+      setPassword('');
+      
+      // Navigate to dashboard
+      console.log('Navigating to dashboard...');
       navigate('/dashboard', { replace: true });
     } catch (error) {
       console.error('Login error:', error);

@@ -213,6 +213,34 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
         };
+      },
+      audit_logs: {
+        Row: {
+          id: string;
+          admin_id: string | null;
+          action: string;
+          table_name: string;
+          record_id: string;
+          changes: Json;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          admin_id?: string | null;
+          action: string;
+          table_name: string;
+          record_id: string;
+          changes: Json;
+          created_at?: string;
+        };
+        Update: {
+          admin_id?: string | null;
+          action?: string;
+          table_name?: string;
+          record_id?: string;
+          changes?: Json;
+          created_at?: string;
+        };
       }
     }
   }

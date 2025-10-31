@@ -31,7 +31,7 @@ export function TestConnection() {
 
         // Test database connection
         const { data, error: dbError } = await supabase
-          .from('users')
+          .from('admins')
           .select('*', { count: 'exact', head: true });
 
         if (dbError) {
