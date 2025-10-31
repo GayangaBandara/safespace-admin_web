@@ -46,7 +46,7 @@ const SignUp = () => {
       
       await useAdminStore.getState().signup(formData.email, formData.password, formData.username);
 
-      setSuccessMessage('Registration successful! Please wait for a super admin to approve your account.');
+      setSuccessMessage('Registration successful! Please check your email to verify your account. Once verified, a super admin will review your application.');
       setFormData({
         email: '',
         password: '',
@@ -54,14 +54,14 @@ const SignUp = () => {
         username: ''
       });
       
-      // Wait for 2 seconds to show the success message before redirecting
+      // Wait for 3 seconds to show the success message before redirecting
       setTimeout(() => {
         navigate('/login', { 
           state: { 
-            message: 'Registration successful! Please sign in with your new account.' 
+            message: 'Please check your email to verify your account before signing in.' 
           }
         });
-      }, 2000);
+      }, 3000);
     } catch (error) {
       setError(error instanceof Error ? error.message : 'An error occurred');
     } finally {

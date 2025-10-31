@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useAdminStore } from '../store/adminStore';
 import { supabase } from '../lib/supabase';
 import {
   BarChart,
@@ -32,9 +33,27 @@ const Dashboard = () => {
   const [doctorStats, setDoctorStats] = useState<DoctorStatus[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const { admin } = useAdminStore();
+  
   useEffect(() => {
     const fetchStats = async () => {
       try {
+        if (admin?.id) {
+          // Fetch admin profile first
+          const { data: adminData, error: adminError } = await supabase
+            .from('admins')
+            .select('*')
+            .eq('id', admin.id)
+            .single();
+
+          if (adminError) {
+            console.error('Error fetching admin details:', adminError);
+          } else if (adminData) {
+            // Update admin store with complete data
+            useAdminStore.setState({ admin: adminData });
+          }
+        }
+
         // Fetch total users
         const { count: userCount } = await supabase
           .from('users')
@@ -87,7 +106,7 @@ const Dashboard = () => {
     };
 
     fetchStats();
-  }, []);
+  }, [admin?.id]);
 
   if (loading) {
     return (

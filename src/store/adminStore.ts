@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { supabase } from '../lib/supabase';
 import type { Database } from '../types/supabase';
+import { clearAuthData } from '../lib/clearAuthData';
 
 interface AdminState {
   admin: Database['public']['Tables']['admins']['Row'] | null;
@@ -27,30 +28,37 @@ export const useAdminStore = create<AdminState>()(
 
       login: async (email: string, password: string) => {
         try {
-          set({ loading: true, error: null });
-
-          // First sign in with Supabase Auth
+          // Clear existing state first
+          set({ loading: true, error: null, admin: null });
+          
+          console.log('Attempting login for:', email);
+          
+          // Sign in with Supabase Auth
           const { data: authData, error: signInError } = await supabase.auth.signInWithPassword({
             email,
-            password,
+            password
           });
 
-          if (signInError) throw signInError;
-          if (!authData.user) throw new Error('Authentication failed');
+          if (signInError) {
+            console.error('Sign in error:', signInError);
+            throw new Error(signInError.message);
+          }
 
-          // Then fetch the admin profile
-          const { data: admin, error: adminError } = await supabase
-            .from('admins')
-            .select('*')
-            .eq('id', authData.user.id)
-            .single();
+          if (!authData?.user) {
+            console.error('No user data received');
+            throw new Error('Authentication failed - no user data received');
+          }
 
-          if (adminError) throw adminError;
-          if (!admin) throw new Error('Admin profile not found');
-
-          // Update the store with the admin data
+          // Just update with basic user info, we'll fetch admin details later
           set({
-            admin,
+            admin: {
+              id: authData.user.id,
+              email: authData.user.email!,
+              full_name: authData.user.user_metadata?.full_name || null,
+              role: 'moderator',
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            },
             loading: false,
             error: null,
             initialized: true
@@ -69,8 +77,8 @@ export const useAdminStore = create<AdminState>()(
       logout: async () => {
         try {
           set({ loading: true, error: null });
-          const { error } = await supabase.auth.signOut();
-          if (error) throw error;
+          const success = await clearAuthData();
+          if (!success) throw new Error('Failed to clear auth data');
           set({
             admin: null,
             loading: false,
@@ -91,13 +99,25 @@ export const useAdminStore = create<AdminState>()(
         try {
           set({ loading: true, error: null });
 
+          // Check if email already exists in admins table
+          const { data: existingAdmin } = await supabase
+            .from('admins')
+            .select('id')
+            .eq('email', email)
+            .maybeSingle();
+
+          if (existingAdmin) {
+            throw new Error('An account with this email already exists');
+          }
+
           const { data: authData, error: signUpError } = await supabase.auth.signUp({
             email,
             password,
             options: {
               data: {
                 full_name: username
-              }
+              },
+              emailRedirectTo: `${window.location.origin}/login`
             }
           });
 

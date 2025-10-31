@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useAdminStore } from '../store/adminStore';
 
 const Login = () => {
-  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -18,40 +17,32 @@ const Login = () => {
     }
   }, []);
 
-  const { admin, login, initialized } = useAdminStore();
-
-  // Immediately redirect if we already have an admin session
-  useEffect(() => {
-    if (initialized && admin) {
-      navigate('/dashboard', { replace: true });
-    }
-  }, [admin, navigate, initialized]);
+  const { login } = useAdminStore();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       setLoading(true);
       setError(null);
+      setSuccessMessage(null);
 
       if (!email || !password) {
         setError('Please enter both email and password');
         return;
       }
 
-      console.log('Attempting login for:', email);
       await login(email, password);
-      console.log('Login successful');
-
+      
+      // Don't navigate here - let the AuthProvider handle navigation
+      // The auth state change will trigger a redirect automatically
+      
       // Reset form
       setEmail('');
       setPassword('');
-      
-      // Navigate to dashboard
-      console.log('Navigating to dashboard...');
-      navigate('/dashboard', { replace: true });
+      setSuccessMessage('Login successful! Redirecting...');
     } catch (error) {
       console.error('Login error:', error);
-      setError(error instanceof Error ? error.message : 'An error occurred');
+      setError(error instanceof Error ? error.message : 'An error occurred during login');
       setPassword('');
     } finally {
       setLoading(false);
