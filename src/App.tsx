@@ -1,94 +1,19 @@
-import { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { supabase } from './lib/supabase';
-import { useAdminStore } from './store/adminStore';
+import { AuthProvider } from './providers/AuthProvider';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import SignUp from './pages/SignUp';
 import Dashboard from './pages/Dashboard';
-import { TestConnection } from './components/TestConnection';
-import checkEnvironment from './utils/checkEnv';
 
 function App() {
-  const { admin, loading, initialized, fetchAdminProfile } = useAdminStore();
-
-  useEffect(() => {
-    async function initializeApp() {
-      // Check environment variables first
-      if (!checkEnvironment()) {
-        console.error('Please fix environment variables before continuing');
-        return;
-      }
-
-      try {
-        // Get initial session
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        if (sessionError) throw sessionError;
-
-        if (session?.user) {
-          // If we have a session but no admin data, fetch the profile
-          if (!admin) {
-            console.log('Found session, fetching admin profile...');
-            await fetchAdminProfile();
-          }
-        } else {
-          // No session, just mark as initialized
-          useAdminStore.setState({ initialized: true, loading: false });
-        }
-      } catch (error) {
-        console.error('Initialization error:', error);
-        useAdminStore.setState({ initialized: true, loading: false });
-      }
-    }
-
-    if (!initialized) {
-      initializeApp();
-    }
-
-    // Listen for auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth state changed:', event);
-      if (event === 'SIGNED_OUT') {
-        console.log('User signed out, clearing state...');
-        useAdminStore.setState({ admin: null, loading: false, initialized: true });
-      } else if (event === 'SIGNED_IN' && session) {
-        console.log('User signed in, fetching profile...');
-        await fetchAdminProfile();
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, [initialized, fetchAdminProfile, admin]);
-
-  if (loading || !initialized) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center gradient-bg">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500 mx-auto mb-4"></div>
-          <p className="text-gray-600 font-medium">Loading your dashboard...</p>
-        </div>
-        <div className="mt-8">
-          <TestConnection />
-        </div>
-      </div>
-    );
-  }
-
   return (
     <Router>
-      <Routes>
-        <Route
-          path="/login"
-          element={!admin ? <Login /> : <Navigate to="/dashboard" replace />}
-        />
+      <AuthProvider>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<SignUp />} />
 
-        <Route
-          path="/signup"
-          element={!admin ? <SignUp /> : <Navigate to="/dashboard" replace />}
-        />
-
-        {/* Protected routes */}
-        {admin ? (
+          {/* Protected routes */}
           <Route path="/" element={<Layout />}>
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="dashboard" element={<Dashboard />} />
@@ -99,13 +24,8 @@ function App() {
             <Route path="settings" element={<div>Settings Page Coming Soon</div>} />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Route>
-        ) : (
-          <Route
-            path="*"
-            element={<Navigate to="/login" replace />}
-          />
-        )}
-      </Routes>
+        </Routes>
+      </AuthProvider>
     </Router>
   );
 }

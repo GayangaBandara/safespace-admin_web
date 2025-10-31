@@ -196,12 +196,10 @@ export const useAdminStore = create<AdminState>()(
     }),
     {
       name: 'admin-storage',
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => sessionStorage),
       partialize: (state) => ({
         admin: state.admin,
-        initialized: state.initialized,
-        loading: state.loading,
-        error: state.error
+        initialized: state.initialized
       })
     }
   )

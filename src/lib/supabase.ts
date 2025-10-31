@@ -20,7 +20,7 @@ export const supabase = createClient<Database>(
       autoRefreshToken: true,
       detectSessionInUrl: true,
       storageKey: 'safespace-admin-auth',
-      storage: window.sessionStorage
+      storage: localStorage
     },
     global: {
       headers: {
