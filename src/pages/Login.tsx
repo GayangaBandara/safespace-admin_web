@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
 import { useAdminStore } from '../store/adminStore';
 
 const Login = () => {
@@ -107,13 +106,8 @@ const Login = () => {
             </div>
 
             <div className="flex items-center justify-between">
-              <div className="text-sm">
-                <Link
-                  to="/signup"
-                  className="font-medium text-indigo-600 hover:text-indigo-500 transition-colors duration-200"
-                >
-                  New admin? Sign up
-                </Link>
+              <div className="text-sm text-gray-500">
+                Only authorized admins can access this system
               </div>
             </div>
 

@@ -37,7 +37,7 @@ export class AdminService {
     return data;
   }
 
-  static async signup(email: string, password: string, fullName: string): Promise<Admin> {
+  static async signup(email: string, password: string, fullName: string, role: 'pending' | 'moderator' | 'superadmin' = 'pending'): Promise<Admin> {
     const { data: { user }, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
@@ -55,7 +55,7 @@ export class AdminService {
       id: user.id,
       email,
       full_name: fullName,
-      role: 'pending'
+      role
     });
   }
 

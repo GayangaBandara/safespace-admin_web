@@ -6,7 +6,7 @@ import { useAdminStore } from '../store/adminStore';
 import { AuthContext } from './AuthContext';
 import { TestConnection } from '../components/TestConnection';
 
-const PUBLIC_ROUTES = ['/', '/login', '/signup'];
+const PUBLIC_ROUTES = ['/', '/login'];
 const DEFAULT_AUTH_ROUTE = '/login';
 const DEFAULT_APP_ROUTE = '/dashboard';
 
