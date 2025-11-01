@@ -149,19 +149,20 @@ export class UserService {
       throw new Error(`Failed to fetch user stats: ${error.message}`);
     }
 
-    const typedUsers = users as Array<{ status: string; created_at: string }> | null;
+    // Type-safe user processing
+    const typedUsers = (users || []) as Array<{ status: string; created_at: string }>;
 
     const stats = {
-      total: typedUsers?.length || 0,
-      active: typedUsers?.filter(u => u.status === 'active').length || 0,
-      inactive: typedUsers?.filter(u => u.status === 'inactive').length || 0,
-      suspended: typedUsers?.filter(u => u.status === 'suspended').length || 0,
-      recentRegistrations: typedUsers?.filter(u => {
+      total: typedUsers.length,
+      active: typedUsers.filter(u => u.status === 'active').length,
+      inactive: typedUsers.filter(u => u.status === 'inactive').length,
+      suspended: typedUsers.filter(u => u.status === 'suspended').length,
+      recentRegistrations: typedUsers.filter(u => {
         const createdDate = new Date(u.created_at);
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
         return createdDate > thirtyDaysAgo;
-      }).length || 0
+      }).length
     };
 
     return stats;

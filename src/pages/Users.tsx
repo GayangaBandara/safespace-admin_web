@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { UserService, type User } from '../lib/userService';
 
 const Users = () => {
@@ -21,10 +21,6 @@ const Users = () => {
     fetchStats();
   }, []);
 
-  useEffect(() => {
-    filterUsers();
-  }, [searchQuery, users]);
-
   const fetchUsers = async () => {
     try {
       setLoading(true);
@@ -46,7 +42,7 @@ const Users = () => {
     }
   };
 
-  const filterUsers = () => {
+  const filterUsers = useCallback(() => {
     if (!searchQuery.trim()) {
       setFilteredUsers(users);
       return;
@@ -58,7 +54,11 @@ const Users = () => {
       user.id.toLowerCase().includes(searchQuery.toLowerCase())
     );
     setFilteredUsers(filtered);
-  };
+  }, [searchQuery, users]);
+
+  useEffect(() => {
+    filterUsers();
+  }, [filterUsers]);
 
   const handleStatusUpdate = async (userId: string, newStatus: 'active' | 'inactive' | 'suspended') => {
     try {
@@ -120,7 +120,13 @@ const Users = () => {
   };
 
   const formatUID = (uid: string) => {
-    return uid.length > 20 ? `${uid.substring(0, 20)}...` : uid;
+    // Show full UID for better readability and copy functionality
+    return uid;
+  };
+
+  const getDisplayId = (id: string) => {
+    // Show first 8 characters for display purposes
+    return `${id.substring(0, 8)}...`;
   };
 
   if (loading) {
@@ -366,22 +372,31 @@ const Users = () => {
                               {user.full_name || 'No name provided'}
                             </div>
                             <div className="text-sm text-gray-500">
-                              ID: {user.id.substring(0, 8)}...
+                              ID: {getDisplayId(user.id)}
                             </div>
                           </div>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-mono text-gray-900 bg-gray-50 px-2 py-1 rounded">
-                          {formatUID(user.id)}
-                        </div>
-                        <div className="text-xs text-gray-500 mt-1">
-                          <button
-                            onClick={() => navigator.clipboard.writeText(user.id)}
-                            className="text-indigo-600 hover:text-indigo-900"
-                          >
-                            Copy UID
-                          </button>
+                        <div className="space-y-1">
+                          <div className="text-sm font-mono text-gray-900 bg-gray-50 px-2 py-1 rounded border">
+                            {formatUID(user.id)}
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <div className="text-xs text-gray-500">
+                              Authentication UID
+                            </div>
+                            <button
+                              onClick={() => navigator.clipboard.writeText(user.id)}
+                              className="text-xs text-indigo-600 hover:text-indigo-900 flex items-center space-x-1"
+                              title="Copy full UID to clipboard"
+                            >
+                              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                              </svg>
+                              <span>Copy</span>
+                            </button>
+                          </div>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
