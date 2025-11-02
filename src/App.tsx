@@ -4,6 +4,7 @@ import Layout from './components/Layout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Users from './pages/Users';
+import AdminManagement from './pages/AdminManagement';
 import AddNewAdmin from './pages/AddNewAdmin';
 import ManageAdmins from './pages/ManageAdmins';
 
@@ -25,6 +26,7 @@ function App() {
             <Route path="settings" element={<div>Settings Page Coming Soon</div>} />
             <Route path="admin/add" element={<AddNewAdmin />} />
             <Route path="admin/manage" element={<ManageAdmins />} />
+            <Route path="admin/roles" element={<AdminManagement />} />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Route>
         </Routes>

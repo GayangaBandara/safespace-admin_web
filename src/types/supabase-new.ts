@@ -787,7 +787,7 @@ export type CompositeTypes<
 }
   ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
-    ? DefaultSchema["CompositeTypes"][Extract<CompositeTypeName, keyof DefaultSchema["CompositeTypes"]>]
+    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
     : never
 
 export const Constants = {
@@ -798,11 +798,3 @@ export const Constants = {
     },
   },
 } as const
-
-// Type aliases for easier access
-export type UserRole = Database['public']['Tables']['user_roles']['Row'];
-export type UserRoleInsert = Database['public']['Tables']['user_roles']['Insert'];
-export type UserRoleUpdate = Database['public']['Tables']['user_roles']['Update'];
-export type User = Database['public']['Tables']['users']['Row'];
-export type UserInsert = Database['public']['Tables']['users']['Insert'];
-export type UserUpdate = Database['public']['Tables']['users']['Update'];

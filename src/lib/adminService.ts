@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import type { Database } from '../types/supabase';
+import type { Database, UserRoleInsert } from '../types/supabase';
 
 export type Admin = Database['public']['Tables']['admins']['Row'];
 type AdminInsert = Database['public']['Tables']['admins']['Insert'];
@@ -21,17 +21,30 @@ export interface AdminSignupData {
 
 export class AdminService {
   static async createAdmin(adminData: AdminInsert): Promise<Admin> {
-    // Note: Supabase typing issues with strict mode
-    // Using any as a workaround for now
-    const { data, error } = await (supabase
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .from('admins') as any)
+    // Create the admin record
+    const { data, error } = await supabase
+      .from('admins')
       .insert(adminData)
       .select()
       .single();
 
     if (error) {
       throw new AdminError(`Failed to create admin: ${error.message}`, error.code);
+    }
+
+    // Automatically create a user role entry for the new admin
+    try {
+      const userRoleData: UserRoleInsert = {
+        user_id: adminData.id,
+        role: 'admin'
+      };
+      
+      await supabase
+        .from('user_roles')
+        .insert(userRoleData);
+    } catch (roleError) {
+      // If user_roles doesn't exist yet, that's okay - it might be created later
+      console.warn('Could not create user role entry:', roleError);
     }
 
     return data;
@@ -51,12 +64,31 @@ export class AdminService {
       throw new AdminError('No user ID returned from signup');
     }
 
-    return this.createAdmin({
+    // Create the admin record
+    const admin = await this.createAdmin({
       id: user.id,
       email,
       full_name: fullName,
       role
     });
+
+    // Automatically create user role entry if admin is approved (not pending)
+    if (role !== 'pending') {
+      try {
+        const userRoleData: UserRoleInsert = {
+          user_id: user.id,
+          role: 'admin'
+        };
+        
+        await supabase
+          .from('user_roles')
+          .insert(userRoleData);
+      } catch (roleError) {
+        console.warn('Could not create user role entry for approved admin:', roleError);
+      }
+    }
+
+    return admin;
   }
 
   static async getAllAdmins(): Promise<Admin[]> {
@@ -123,7 +155,7 @@ export class AdminService {
     approverId: string
   ): Promise<{ success: boolean; message: string }> {
     // Note: Supabase RPC typing issues with strict mode
-    // Using any as a workaround for now
+    // Using any as a workaround for RPC call - this is a known limitation
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, error } = await (supabase.rpc as any)('approve_admin', {
       admin_id: adminId,
@@ -133,6 +165,22 @@ export class AdminService {
 
     if (error) {
       throw new AdminError(`Failed to approve admin: ${error.message}`, error.code);
+    }
+
+    // If admin is approved, create user role entry
+    if (approve) {
+      try {
+        const userRoleData: UserRoleInsert = {
+          user_id: adminId,
+          role: 'admin'
+        };
+        
+        await supabase
+          .from('user_roles')
+          .insert(userRoleData);
+      } catch (roleError) {
+        console.warn('Could not create user role entry for approved admin:', roleError);
+      }
     }
 
     return data;
@@ -148,11 +196,9 @@ export class AdminService {
       throw new AdminError(`Login failed: ${signInError.message}`);
     }
 
-    // Note: Supabase typing issues with strict mode
-    // Using any as a workaround for now
-    const { data: admin, error: adminError } = await (supabase
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .from('admins') as any)
+    // Get the admin profile using the proper typed client
+    const { data: admin, error: adminError } = await supabase
+      .from('admins')
       .select('*')
       .eq('email', email)
       .single();

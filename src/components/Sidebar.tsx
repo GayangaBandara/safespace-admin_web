@@ -8,6 +8,7 @@ import {
   CogIcon,
   UserPlusIcon,
   ShieldCheckIcon,
+  UserCircleIcon,
 } from '@heroicons/react/24/outline';
 
 const navigation = [
@@ -22,6 +23,7 @@ const navigation = [
 const adminManagement = [
   { name: 'Add New Admin', href: '/admin/add', icon: UserPlusIcon },
   { name: 'Manage Admins', href: '/admin/manage', icon: ShieldCheckIcon },
+  { name: 'User Roles', href: '/admin/roles', icon: UserCircleIcon },
 ];
 
 const Sidebar = () => {

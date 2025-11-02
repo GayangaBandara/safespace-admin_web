@@ -8,7 +8,8 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing required Supabase environment variables. Please check your .env file.');
 }
 
-export const supabase = createClient<Database>(
+// Create client with proper typing for the specific schema
+export const supabase = createClient<Database, 'public'>(
   supabaseUrl,
   supabaseAnonKey,
   {
