@@ -1,35 +1,35 @@
 import { useState, useEffect, useCallback } from 'react';
-import { UserRolesService, type UserWithRole } from '../lib/userRolesService';
+import { UserRolesService, type UserRoleDisplay } from '../lib/userRolesService';
 import { useAdminStore } from '../store/adminStore';
 
 const AdminManagement = () => {
   const { admin: currentAdmin } = useAdminStore();
-  const [users, setUsers] = useState<UserWithRole[]>([]);
+  const [userRoles, setUserRoles] = useState<UserRoleDisplay[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filteredUsers, setFilteredUsers] = useState<UserWithRole[]>([]);
+  const [filteredUserRoles, setFilteredUserRoles] = useState<UserRoleDisplay[]>([]);
   const [stats, setStats] = useState({
     total: 0,
     patients: 0,
     doctors: 0,
     admins: 0,
-    usersWithoutRoles: 0
+    superadmins: 0
   });
   const [savingRoles, setSavingRoles] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    fetchUsers();
+    fetchUserRoles();
     fetchStats();
   }, []);
 
-  const fetchUsers = async () => {
+  const fetchUserRoles = async () => {
     try {
       setLoading(true);
-      const data = await UserRolesService.getAllUsersWithRoles();
-      setUsers(data);
+      const data = await UserRolesService.getAllUserRoles();
+      setUserRoles(data);
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'Failed to fetch users with roles');
+      setError(error instanceof Error ? error.message : 'Failed to fetch user roles');
     } finally {
       setLoading(false);
     }
@@ -44,35 +44,34 @@ const AdminManagement = () => {
     }
   };
 
-  const filterUsers = useCallback(() => {
+  const filterUserRoles = useCallback(() => {
     if (!searchQuery.trim()) {
-      setFilteredUsers(users);
+      setFilteredUserRoles(userRoles);
       return;
     }
 
-    const filtered = users.filter(user =>
-      user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (user.full_name && user.full_name.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      user.id.toLowerCase().includes(searchQuery.toLowerCase())
+    const filtered = userRoles.filter(role =>
+      role.user_id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      role.role.toLowerCase().includes(searchQuery.toLowerCase())
     );
-    setFilteredUsers(filtered);
-  }, [searchQuery, users]);
+    setFilteredUserRoles(filtered);
+  }, [searchQuery, userRoles]);
 
   useEffect(() => {
-    filterUsers();
-  }, [filterUsers]);
+    filterUserRoles();
+  }, [filterUserRoles]);
 
-  const handleRoleUpdate = async (userId: string, newRole: 'patient' | 'doctor' | 'admin') => {
+  const handleRoleUpdate = async (userId: string, newRole: 'patient' | 'doctor' | 'admin' | 'superadmin') => {
     try {
       setSavingRoles(prev => new Set(prev).add(userId));
       await UserRolesService.updateUserRole(userId, newRole);
       
       // Update local state
-      setUsers(prevUsers => 
-        prevUsers.map(user => 
-          user.id === userId 
-            ? { ...user, user_role: user.user_role ? { ...user.user_role, role: newRole } : { id: '0', user_id: userId, role: newRole, created_at: new Date().toISOString(), updated_at: new Date().toISOString() } }
-            : user
+      setUserRoles(prevRoles => 
+        prevRoles.map(role => 
+          role.user_id === userId 
+            ? { ...role, role: newRole }
+            : role
         )
       );
       
@@ -88,20 +87,13 @@ const AdminManagement = () => {
     }
   };
 
-  const getRoleBadge = (role: string | null) => {
+  const getRoleBadge = (role: string) => {
     const roleConfig = {
       patient: { label: 'Patient (Main App)', className: 'bg-green-100 text-green-800' },
       doctor: { label: 'Doctor (Doctor App)', className: 'bg-blue-100 text-blue-800' },
-      admin: { label: 'Admin (Admin Web)', className: 'bg-purple-100 text-purple-800' }
+      admin: { label: 'Admin (Admin Web)', className: 'bg-purple-100 text-purple-800' },
+      superadmin: { label: 'Super Admin (Admin Web)', className: 'bg-red-100 text-red-800' }
     };
-
-    if (!role) {
-      return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-          No Role
-        </span>
-      );
-    }
 
     const config = roleConfig[role as keyof typeof roleConfig] || { label: role, className: 'bg-gray-100 text-gray-800' };
     
@@ -172,13 +164,13 @@ const AdminManagement = () => {
         <div className="px-4 py-5 sm:p-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Admin Management</h1>
+              <h1 className="text-2xl font-bold text-gray-900">User Roles Management</h1>
               <p className="mt-1 text-sm text-gray-500">
                 Manage user roles across all applications
               </p>
             </div>
             <button
-              onClick={fetchUsers}
+              onClick={fetchUserRoles}
               className="btn-secondary"
               disabled={loading}
             >
@@ -239,7 +231,7 @@ const AdminManagement = () => {
               </div>
               <div className="ml-5 w-0 flex-1">
                 <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">Total Users</dt>
+                  <dt className="text-sm font-medium text-gray-500 truncate">Total Roles</dt>
                   <dd className="text-lg font-medium text-gray-900">{stats.total}</dd>
                 </dl>
               </div>
@@ -305,14 +297,14 @@ const AdminManagement = () => {
           <div className="p-5">
             <div className="flex items-center">
               <div className="flex-shrink-0">
-                <svg className="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                <svg className="h-6 w-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                 </svg>
               </div>
               <div className="ml-5 w-0 flex-1">
                 <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">No Role</dt>
-                  <dd className="text-lg font-medium text-gray-600">{stats.usersWithoutRoles}</dd>
+                  <dt className="text-sm font-medium text-gray-500 truncate">Super Admins</dt>
+                  <dd className="text-lg font-medium text-red-600">{stats.superadmins}</dd>
                 </dl>
               </div>
             </div>
@@ -336,28 +328,28 @@ const AdminManagement = () => {
                   id="search"
                   name="search"
                   className="input-field pl-10"
-                  placeholder="Search by email, name, or UID..."
+                  placeholder="Search by User ID or Role..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
               </div>
             </div>
             <div className="ml-4 text-sm text-gray-500">
-              {filteredUsers.length} of {users.length} users
+              {filteredUserRoles.length} of {userRoles.length} roles
             </div>
           </div>
 
-          {/* Users Table */}
-          {filteredUsers.length === 0 ? (
+          {/* User Roles Table */}
+          {filteredUserRoles.length === 0 ? (
             <div className="text-center py-12">
               <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
               </svg>
               <h3 className="mt-2 text-sm font-medium text-gray-900">
-                {searchQuery ? 'No users found' : 'No users yet'}
+                {searchQuery ? 'No roles found' : 'No user roles yet'}
               </h3>
               <p className="mt-1 text-sm text-gray-500">
-                {searchQuery ? 'Try adjusting your search query.' : 'Users will appear here once they register.'}
+                {searchQuery ? 'Try adjusting your search query.' : 'User roles will appear here once users register.'}
               </p>
             </div>
           ) : (
@@ -366,7 +358,7 @@ const AdminManagement = () => {
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      User Details
+                      Role ID
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       User ID
@@ -383,49 +375,38 @@ const AdminManagement = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredUsers.map((user) => (
-                    <tr key={user.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div className="flex-shrink-0 h-10 w-10">
-                            <div className="h-10 w-10 rounded-full bg-gray-300 flex items-center justify-center">
-                              <span className="text-sm font-medium text-gray-700">
-                                {user.full_name ? user.full_name.charAt(0).toUpperCase() : user.email.charAt(0).toUpperCase()}
-                              </span>
-                            </div>
-                          </div>
-                          <div className="ml-4">
-                            <div className="text-sm font-medium text-gray-900">
-                              {user.full_name || 'No name provided'}
-                            </div>
-                            <div className="text-sm text-gray-500">{user.email}</div>
-                          </div>
-                        </div>
-                      </td>
+                  {filteredUserRoles.map((role) => (
+                    <tr key={role.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-mono text-gray-900 bg-gray-50 px-2 py-1 rounded border">
-                          {formatUID(user.id)}
+                          {formatUID(role.id)}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        {getRoleBadge(user.user_role?.role || null)}
+                        <div className="text-sm font-mono text-gray-900 bg-blue-50 px-2 py-1 rounded border">
+                          {formatUID(role.user_id)}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {getRoleBadge(role.role)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <select
-                          value={user.user_role?.role || 'patient'}
-                          onChange={(e) => handleRoleUpdate(user.id, e.target.value as 'patient' | 'doctor' | 'admin')}
-                          disabled={savingRoles.has(user.id)}
+                          value={role.role}
+                          onChange={(e) => handleRoleUpdate(role.user_id, e.target.value as 'patient' | 'doctor' | 'admin' | 'superadmin')}
+                          disabled={savingRoles.has(role.user_id)}
                           className="text-xs border border-gray-300 rounded px-2 py-1 disabled:opacity-50"
                         >
                           <option value="patient">Patient (Main App)</option>
                           <option value="doctor">Doctor (Doctor App)</option>
                           <option value="admin">Admin (Admin Web)</option>
+                          <option value="superadmin">Super Admin (Admin Web)</option>
                         </select>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {new Date(user.created_at).toLocaleDateString()}
+                        {new Date(role.created_at).toLocaleDateString()}
                         <div className="text-xs">
-                          {new Date(user.created_at).toLocaleTimeString()}
+                          {new Date(role.created_at).toLocaleTimeString()}
                         </div>
                       </td>
                     </tr>

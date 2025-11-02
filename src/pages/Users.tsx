@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
-import { UserService, type User } from '../lib/userService';
+import { UserRolesService, type UserRoleDisplay } from '../lib/userRolesService';
 
 const Users = () => {
-  const [users, setUsers] = useState<User[]>([]);
+  const [userRoles, setUserRoles] = useState<UserRoleDisplay[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
+  const [filteredUserRoles, setFilteredUserRoles] = useState<UserRoleDisplay[]>([]);
   const [stats, setStats] = useState({
     total: 0,
     active: 0,
@@ -17,17 +17,17 @@ const Users = () => {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchUsers();
+    fetchUserRoles();
     fetchStats();
   }, []);
 
-  const fetchUsers = async () => {
+  const fetchUserRoles = async () => {
     try {
       setLoading(true);
-      const data = await UserService.getAllUsers();
-      setUsers(data);
+      const data = await UserRolesService.getAllUserRoles();
+      setUserRoles(data);
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'Failed to fetch users');
+      setError(error instanceof Error ? error.message : 'Failed to fetch user roles');
     } finally {
       setLoading(false);
     }
@@ -35,88 +35,74 @@ const Users = () => {
 
   const fetchStats = async () => {
     try {
-      const data = await UserService.getUserStats();
-      setStats(data);
+      const data = await UserRolesService.getRoleStats();
+      // Convert role stats to user stats format
+      setStats({
+        total: data.total,
+        active: data.patients, // Patients count as active
+        inactive: data.doctors, // Doctors count as inactive (different app)
+        suspended: 0, // No suspended users in roles table
+        recentRegistrations: data.total // All roles are recent registrations
+      });
     } catch (error) {
       console.error('Failed to fetch stats:', error);
     }
   };
 
-  const filterUsers = useCallback(() => {
+  const filterUserRoles = useCallback(() => {
     if (!searchQuery.trim()) {
-      setFilteredUsers(users);
+      setFilteredUserRoles(userRoles);
       return;
     }
 
-    const filtered = users.filter(user =>
-      user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (user.full_name && user.full_name.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      user.id.toLowerCase().includes(searchQuery.toLowerCase())
+    const filtered = userRoles.filter(role =>
+      role.user_id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      role.role.toLowerCase().includes(searchQuery.toLowerCase())
     );
-    setFilteredUsers(filtered);
-  }, [searchQuery, users]);
+    setFilteredUserRoles(filtered);
+  }, [searchQuery, userRoles]);
 
   useEffect(() => {
-    filterUsers();
-  }, [filterUsers]);
+    filterUserRoles();
+  }, [filterUserRoles]);
 
-  const handleStatusUpdate = async (userId: string, newStatus: 'active' | 'inactive' | 'suspended') => {
+  const handleRoleUpdate = async (userId: string, newRole: 'patient' | 'doctor' | 'admin' | 'superadmin') => {
     try {
       setActionLoading(userId);
-      await UserService.updateUserStatus(userId, newStatus);
-      await fetchUsers();
+      await UserRolesService.updateUserRole(userId, newRole);
+      
+      // Update local state
+      setUserRoles(prevRoles => 
+        prevRoles.map(role => 
+          role.user_id === userId 
+            ? { ...role, role: newRole }
+            : role
+        )
+      );
+      
       await fetchStats();
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'Failed to update user status');
+      setError(error instanceof Error ? error.message : 'Failed to update user role');
     } finally {
       setActionLoading(null);
     }
   };
 
-  const handleDeleteUser = async (userId: string) => {
-    if (!confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
-      return;
-    }
+  const getRoleBadge = (role: string) => {
+    const roleConfig = {
+      patient: { label: 'Patient (Main App)', className: 'bg-green-100 text-green-800' },
+      doctor: { label: 'Doctor (Doctor App)', className: 'bg-blue-100 text-blue-800' },
+      admin: { label: 'Admin (Admin Web)', className: 'bg-purple-100 text-purple-800' },
+      superadmin: { label: 'Super Admin (Admin Web)', className: 'bg-red-100 text-red-800' }
+    };
 
-    try {
-      setActionLoading(userId);
-      await UserService.deleteUser(userId);
-      await fetchUsers();
-      await fetchStats();
-    } catch (error) {
-      setError(error instanceof Error ? error.message : 'Failed to delete user');
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'active':
-        return (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-            Active
-          </span>
-        );
-      case 'inactive':
-        return (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-            Inactive
-          </span>
-        );
-      case 'suspended':
-        return (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-            Suspended
-          </span>
-        );
-      default:
-        return (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-            {status}
-          </span>
-        );
-    }
+    const config = roleConfig[role as keyof typeof roleConfig] || { label: role, className: 'bg-gray-100 text-gray-800' };
+    
+    return (
+      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${config.className}`}>
+        {config.label}
+      </span>
+    );
   };
 
   const formatUID = (uid: string) => {
@@ -162,11 +148,11 @@ const Users = () => {
             <div>
               <h1 className="text-2xl font-bold text-gray-900">User Management</h1>
               <p className="mt-1 text-sm text-gray-500">
-                Manage user accounts and view authentication details
+                View and manage user roles across all applications
               </p>
             </div>
             <button
-              onClick={fetchUsers}
+              onClick={fetchUserRoles}
               className="btn-secondary"
               disabled={loading}
             >
@@ -194,7 +180,7 @@ const Users = () => {
                   <ol className="list-decimal list-inside text-red-700 space-y-1">
                     <li>Apply the database migration: <code className="bg-red-200 px-1 rounded">supabase/db reset</code></li>
                     <li>Or manually run: <code className="bg-red-200 px-1 rounded">supabase migration up</code></li>
-                    <li>Migration file: <code className="bg-red-200 px-1 rounded">supabase/migrations/00008_create_users_table.sql</code></li>
+                    <li>Migration file: <code className="bg-red-200 px-1 rounded">supabase/migrations/00009_create_user_roles_table.sql</code></li>
                   </ol>
                 </div>
               </div>
@@ -245,7 +231,7 @@ const Users = () => {
               </div>
               <div className="ml-5 w-0 flex-1">
                 <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">Active</dt>
+                  <dt className="text-sm font-medium text-gray-500 truncate">Patients</dt>
                   <dd className="text-lg font-medium text-green-600">{stats.active}</dd>
                 </dl>
               </div>
@@ -257,14 +243,14 @@ const Users = () => {
           <div className="p-5">
             <div className="flex items-center">
               <div className="flex-shrink-0">
-                <svg className="h-6 w-6 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                <svg className="h-6 w-6 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
                 </svg>
               </div>
               <div className="ml-5 w-0 flex-1">
                 <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">Inactive</dt>
-                  <dd className="text-lg font-medium text-yellow-600">{stats.inactive}</dd>
+                  <dt className="text-sm font-medium text-gray-500 truncate">Doctors</dt>
+                  <dd className="text-lg font-medium text-blue-600">{stats.inactive}</dd>
                 </dl>
               </div>
             </div>
@@ -275,14 +261,14 @@ const Users = () => {
           <div className="p-5">
             <div className="flex items-center">
               <div className="flex-shrink-0">
-                <svg className="h-6 w-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728L5.636 5.636m12.728 12.728L18.364 5.636M5.636 18.364l12.728-12.728" />
+                <svg className="h-6 w-6 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                 </svg>
               </div>
               <div className="ml-5 w-0 flex-1">
                 <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">Suspended</dt>
-                  <dd className="text-lg font-medium text-red-600">{stats.suspended}</dd>
+                  <dt className="text-sm font-medium text-gray-500 truncate">Admins</dt>
+                  <dd className="text-lg font-medium text-purple-600">{stats.suspended}</dd>
                 </dl>
               </div>
             </div>
@@ -306,19 +292,19 @@ const Users = () => {
                   id="search"
                   name="search"
                   className="input-field pl-10"
-                  placeholder="Search by email, name, or UID..."
+                  placeholder="Search by User ID or Role..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
               </div>
             </div>
             <div className="ml-4 text-sm text-gray-500">
-              {filteredUsers.length} of {users.length} users
+              {filteredUserRoles.length} of {userRoles.length} users
             </div>
           </div>
 
           {/* Users Table */}
-          {filteredUsers.length === 0 ? (
+          {filteredUserRoles.length === 0 ? (
             <div className="text-center py-12">
               <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
@@ -336,43 +322,40 @@ const Users = () => {
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      User Details
+                      User Role Details
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Authentication UID
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
+                      Current Role
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Contact
+                      Change Role
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Created
                     </th>
-                    <th className="relative px-6 py-3">
-                      <span className="sr-only">Actions</span>
-                    </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredUsers.map((user) => (
-                    <tr key={user.id} className="hover:bg-gray-50">
+                  {filteredUserRoles.map((role) => (
+                    <tr key={role.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
                           <div className="flex-shrink-0 h-10 w-10">
                             <div className="h-10 w-10 rounded-full bg-gray-300 flex items-center justify-center">
                               <span className="text-sm font-medium text-gray-700">
-                                {user.full_name ? user.full_name.charAt(0).toUpperCase() : user.email.charAt(0).toUpperCase()}
+                                {role.role.charAt(0).toUpperCase()}
                               </span>
                             </div>
                           </div>
                           <div className="ml-4">
                             <div className="text-sm font-medium text-gray-900">
-                              {user.full_name || 'No name provided'}
+                              Role: {role.role}
                             </div>
                             <div className="text-sm text-gray-500">
-                              ID: {getDisplayId(user.id)}
+                              ID: {getDisplayId(role.id)}
                             </div>
                           </div>
                         </div>
@@ -380,14 +363,14 @@ const Users = () => {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="space-y-1">
                           <div className="text-sm font-mono text-gray-900 bg-gray-50 px-2 py-1 rounded border">
-                            {formatUID(user.id)}
+                            {formatUID(role.user_id)}
                           </div>
                           <div className="flex justify-between items-center">
                             <div className="text-xs text-gray-500">
                               Authentication UID
                             </div>
                             <button
-                              onClick={() => navigator.clipboard.writeText(user.id)}
+                              onClick={() => navigator.clipboard.writeText(role.user_id)}
                               className="text-xs text-indigo-600 hover:text-indigo-900 flex items-center space-x-1"
                               title="Copy full UID to clipboard"
                             >
@@ -400,43 +383,25 @@ const Users = () => {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        {getStatusBadge(user.status)}
+                        {getRoleBadge(role.role)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">{user.email}</div>
-                        {user.phone_number && (
-                          <div className="text-sm text-gray-500">{user.phone_number}</div>
-                        )}
+                        <select
+                          value={role.role}
+                          onChange={(e) => handleRoleUpdate(role.user_id, e.target.value as 'patient' | 'doctor' | 'admin' | 'superadmin')}
+                          disabled={actionLoading === role.user_id}
+                          className="text-xs border border-gray-300 rounded px-2 py-1 disabled:opacity-50"
+                        >
+                          <option value="patient">Patient (Main App)</option>
+                          <option value="doctor">Doctor (Doctor App)</option>
+                          <option value="admin">Admin (Admin Web)</option>
+                          <option value="superadmin">Super Admin (Admin Web)</option>
+                        </select>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {new Date(user.created_at).toLocaleDateString()}
+                        {new Date(role.created_at).toLocaleDateString()}
                         <div className="text-xs">
-                          {new Date(user.created_at).toLocaleTimeString()}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <div className="flex justify-end space-x-2">
-                          <select
-                            value={user.status}
-                            onChange={(e) => handleStatusUpdate(user.id, e.target.value as 'active' | 'inactive' | 'suspended')}
-                            disabled={actionLoading === user.id}
-                            className="text-xs border border-gray-300 rounded px-2 py-1 disabled:opacity-50"
-                          >
-                            <option value="active">Active</option>
-                            <option value="inactive">Inactive</option>
-                            <option value="suspended">Suspended</option>
-                          </select>
-                          <button
-                            onClick={() => handleDeleteUser(user.id)}
-                            disabled={actionLoading === user.id}
-                            className="text-red-600 hover:text-red-900 disabled:opacity-50 text-xs"
-                          >
-                            {actionLoading === user.id ? (
-                              <div className="animate-spin rounded-full h-3 w-3 border-t-2 border-b-2 border-red-600"></div>
-                            ) : (
-                              'Delete'
-                            )}
-                          </button>
+                          {new Date(role.created_at).toLocaleTimeString()}
                         </div>
                       </td>
                     </tr>

@@ -1,13 +1,12 @@
 import { supabase } from './supabase';
-import type { UserRole, User } from '../types/supabase';
+import type { UserRole } from '../types/supabase';
 
-export interface UserWithRole {
+export interface UserRoleDisplay {
   id: string;
-  email: string;
-  full_name: string | null;
-  status: 'active' | 'inactive' | 'suspended';
+  user_id: string;
+  role: 'patient' | 'doctor' | 'admin' | 'superadmin';
   created_at: string;
-  user_role: UserRole | null;
+  updated_at: string;
 }
 
 export class UserRolesError extends Error {
@@ -20,91 +19,7 @@ export class UserRolesError extends Error {
 }
 
 export class UserRolesService {
-  static async getAllUsersWithRoles(): Promise<UserWithRole[]> {
-    try {
-      // Get all user_roles first
-      const { data: userRolesData, error: rolesError } = await supabase
-        .from('user_roles')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (rolesError) {
-        if (rolesError.message.includes('relation "public.user_roles" does not exist')) {
-          throw new Error('user_roles table does not exist. Please run the database migration: supabase/migrations/00009_create_user_roles_table.sql');
-        }
-        throw new UserRolesError(`Failed to fetch user roles: ${rolesError.message}`, rolesError.code);
-      }
-
-      // Get all users data
-      const { data: usersData, error: usersError } = await supabase
-        .from('users')
-        .select('*');
-
-      if (usersError) {
-        if (usersError.message.includes('relation "public.users" does not exist')) {
-          throw new Error('users table does not exist. Please run the database migration: supabase/migrations/00008_create_users_table.sql');
-        }
-        throw new UserRolesError(`Failed to fetch users: ${usersError.message}`, usersError.code);
-      }
-
-      // Create a map for efficient lookup
-      const usersMap = new Map((usersData || []).map((user: User) => [user.id, user]));
-      
-      // Combine user_roles with user data
-      const results: UserWithRole[] = [];
-      
-      // Add users with roles
-      for (const role of userRolesData || []) {
-        // Handle null user_id
-        if (!role.user_id) {
-          continue;
-        }
-        
-        const user = usersMap.get(role.user_id);
-        
-        if (user) {
-          results.push({
-            id: user.id,
-            email: user.email,
-            full_name: user.full_name,
-            status: (user.status || 'active') as 'active' | 'inactive' | 'suspended',
-            created_at: user.created_at,
-            user_role: {
-              id: role.id,
-              user_id: role.user_id,
-              role: role.role,
-              created_at: role.created_at || '',
-              updated_at: role.updated_at || ''
-            }
-          });
-          // Remove from map to avoid duplicates
-          usersMap.delete(role.user_id);
-        }
-      }
-
-      // Add users without roles
-      for (const [, user] of usersMap) {
-        results.push({
-          id: user.id,
-          email: user.email,
-          full_name: user.full_name,
-          status: (user.status || 'active') as 'active' | 'inactive' | 'suspended',
-          created_at: user.created_at,
-          user_role: null
-        });
-      }
-
-      // Sort by created_at descending
-      return results.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-    } catch (error) {
-      if (error instanceof UserRolesError) {
-        throw error;
-      }
-      throw new UserRolesError(error instanceof Error ? error.message : 'Failed to fetch users with roles');
-    }
-  }
-
-  static async getAllUserRoles(): Promise<UserRole[]> {
+  static async getAllUserRoles(): Promise<UserRoleDisplay[]> {
     try {
       const { data, error } = await supabase
         .from('user_roles')
@@ -118,7 +33,7 @@ export class UserRolesService {
         throw new UserRolesError(`Failed to fetch user roles: ${error.message}`, error.code);
       }
 
-      return (data || []) as UserRole[];
+      return (data || []) as UserRoleDisplay[];
     } catch (error) {
       if (error instanceof UserRolesError) {
         throw error;
@@ -127,7 +42,53 @@ export class UserRolesService {
     }
   }
 
-  static async updateUserRole(userId: string, role: UserRole['role']): Promise<UserRole> {
+  static async getAllUserRolesWithPagination(page: number = 1, limit: number = 10): Promise<{
+    data: UserRoleDisplay[];
+    total: number;
+    totalPages: number;
+    currentPage: number;
+  }> {
+    try {
+      // Get total count first
+      const { count, error: countError } = await supabase
+        .from('user_roles')
+        .select('*', { count: 'exact', head: true });
+
+      if (countError) {
+        throw new UserRolesError(`Failed to count user roles: ${countError.message}`, countError.code);
+      }
+
+      // Calculate pagination
+      const total = count || 0;
+      const totalPages = Math.ceil(total / limit);
+      const offset = (page - 1) * limit;
+
+      // Fetch data with pagination
+      const { data, error } = await supabase
+        .from('user_roles')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .range(offset, offset + limit - 1);
+
+      if (error) {
+        throw new UserRolesError(`Failed to fetch user roles: ${error.message}`, error.code);
+      }
+
+      return {
+        data: (data || []) as UserRoleDisplay[],
+        total,
+        totalPages,
+        currentPage: page
+      };
+    } catch (error) {
+      if (error instanceof UserRolesError) {
+        throw error;
+      }
+      throw new UserRolesError(error instanceof Error ? error.message : 'Failed to fetch user roles');
+    }
+  }
+
+  static async updateUserRole(userId: string, role: UserRole['role']): Promise<UserRoleDisplay> {
     try {
       // Check if user_role record exists for this user
       const { data: existingRole } = await supabase
@@ -149,12 +110,17 @@ export class UserRolesService {
           throw new UserRolesError(`Failed to update user role: ${error.message}`, error.code);
         }
 
-        return data as UserRole;
+        return data as UserRoleDisplay;
       } else {
-        // Create new record
+        // Create new record using the INSERT format you provided
         const { data, error } = await supabase
           .from('user_roles')
-          .insert({ user_id: userId, role })
+          .insert({ 
+            user_id: userId, 
+            role,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
           .select()
           .single();
 
@@ -162,7 +128,7 @@ export class UserRolesService {
           throw new UserRolesError(`Failed to create user role: ${error.message}`, error.code);
         }
 
-        return data as UserRole;
+        return data as UserRoleDisplay;
       }
     } catch (error) {
       if (error instanceof UserRolesError) {
@@ -172,7 +138,7 @@ export class UserRolesService {
     }
   }
 
-  static async getUserRole(userId: string): Promise<UserRole | null> {
+  static async getUserRole(userId: string): Promise<UserRoleDisplay | null> {
     try {
       const { data, error } = await supabase
         .from('user_roles')
@@ -187,7 +153,7 @@ export class UserRolesService {
         throw new UserRolesError(`Failed to fetch user role: ${error.message}`, error.code);
       }
 
-      return data as UserRole;
+      return data as UserRoleDisplay;
     } catch (error) {
       if (error instanceof UserRolesError) {
         throw error;
@@ -214,23 +180,49 @@ export class UserRolesService {
     }
   }
 
+  static async createUserRole(userId: string, role: UserRole['role']): Promise<UserRoleDisplay> {
+    try {
+      const { data, error } = await supabase
+        .from('user_roles')
+        .insert({ 
+          user_id: userId, 
+          role,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (error) {
+        throw new UserRolesError(`Failed to create user role: ${error.message}`, error.code);
+      }
+
+      return data as UserRoleDisplay;
+    } catch (error) {
+      if (error instanceof UserRolesError) {
+        throw error;
+      }
+      throw new UserRolesError(error instanceof Error ? error.message : 'Failed to create user role');
+    }
+  }
+
   static async getRoleStats(): Promise<{
     total: number;
     patients: number;
     doctors: number;
     admins: number;
-    usersWithoutRoles: number;
+    superadmins: number;
   }> {
     try {
-      // Get all users with their roles
-      const usersWithRoles = await this.getAllUsersWithRoles();
+      // Get all user roles for statistics
+      const userRoles = await this.getAllUserRoles();
       
       const stats = {
-        total: usersWithRoles.length,
-        patients: usersWithRoles.filter(u => u.user_role?.role === 'patient').length,
-        doctors: usersWithRoles.filter(u => u.user_role?.role === 'doctor').length,
-        admins: usersWithRoles.filter(u => u.user_role?.role === 'admin').length,
-        usersWithoutRoles: usersWithRoles.filter(u => !u.user_role).length
+        total: userRoles.length,
+        patients: userRoles.filter(u => u.role === 'patient').length,
+        doctors: userRoles.filter(u => u.role === 'doctor').length,
+        admins: userRoles.filter(u => u.role === 'admin').length,
+        superadmins: userRoles.filter(u => u.role === 'superadmin').length
       };
 
       return stats;
@@ -242,7 +234,7 @@ export class UserRolesService {
           patients: 0,
           doctors: 0,
           admins: 0,
-          usersWithoutRoles: 0
+          superadmins: 0
         };
       }
       throw error;
@@ -269,6 +261,28 @@ export class UserRolesService {
       return !!data;
     } catch {
       return false;
+    }
+  }
+
+  // Search user roles by user_id or role
+  static async searchUserRoles(query: string): Promise<UserRoleDisplay[]> {
+    try {
+      const { data, error } = await supabase
+        .from('user_roles')
+        .select('*')
+        .or(`user_id.ilike.%${query}%,role.ilike.%${query}%`)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        throw new UserRolesError(`Failed to search user roles: ${error.message}`, error.code);
+      }
+
+      return (data || []) as UserRoleDisplay[];
+    } catch (error) {
+      if (error instanceof UserRolesError) {
+        throw error;
+      }
+      throw new UserRolesError(error instanceof Error ? error.message : 'Failed to search user roles');
     }
   }
 }
