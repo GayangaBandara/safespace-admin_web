@@ -7,6 +7,7 @@ import Users from './pages/Users';
 import AdminManagement from './pages/AdminManagement';
 import AddNewAdmin from './pages/AddNewAdmin';
 import ManageAdmins from './pages/ManageAdmins';
+import Doctors from './pages/Doctors';
 
 function App() {
   return (
@@ -20,7 +21,7 @@ function App() {
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="users" element={<Users />} />
-            <Route path="doctors" element={<div>Doctors Page Coming Soon</div>} />
+            <Route path="doctors" element={<Doctors />} />
             <Route path="reports" element={<div>Reports Page Coming Soon</div>} />
             <Route path="analytics" element={<div>Analytics Page Coming Soon</div>} />
             <Route path="settings" element={<div>Settings Page Coming Soon</div>} />
