@@ -28,9 +28,13 @@ const ManageAdmins = () => {
   };
 
   const handleApprove = async (adminId: string) => {
+    if (!currentAdmin?.id) {
+      setError('Current admin not found');
+      return;
+    }
     try {
       setActionLoading(adminId);
-      await AdminService.approveAdmin(adminId, true, currentAdmin?.id || '');
+      await AdminService.approveAdmin(adminId, true, currentAdmin.id);
       await fetchAdmins();
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Failed to approve admin');
@@ -44,9 +48,14 @@ const ManageAdmins = () => {
       return;
     }
 
+    if (!currentAdmin?.id) {
+      setError('Current admin not found');
+      return;
+    }
+
     try {
       setActionLoading(adminId);
-      await AdminService.approveAdmin(adminId, false, currentAdmin?.id || '');
+      await AdminService.approveAdmin(adminId, false, currentAdmin.id);
       await fetchAdmins();
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Failed to reject admin');

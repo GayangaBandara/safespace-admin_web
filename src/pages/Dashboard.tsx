@@ -24,7 +24,6 @@ interface RoleStats {
   patients: number;
   doctors: number;
   admins: number;
-  superadmins: number;
 }
 
 const Dashboard = () => {
@@ -39,7 +38,6 @@ const Dashboard = () => {
     patients: 0,
     doctors: 0,
     admins: 0,
-    superadmins: 0,
   });
   const [loading, setLoading] = useState(true);
 
@@ -48,86 +46,113 @@ const Dashboard = () => {
   useEffect(() => {
     const fetchStats = async () => {
       try {
+        // Only fetch admin profile if admin exists and has an id
         if (admin?.id) {
-          // Fetch admin profile first
-          const { data: adminData, error: adminError } = await supabase
-            .from('admins')
-            .select('*')
-            .eq('id', admin.id)
-            .single();
+          try {
+            const { data: adminData, error: adminError } = await supabase
+              .from('admins')
+              .select('*')
+              .eq('id', admin.id)
+              .single();
 
-          if (adminError) {
-            console.error('Error fetching admin details:', adminError);
-          } else if (adminData) {
-            // Update admin store with complete data
-            useAdminStore.setState({ admin: adminData });
+            if (adminError) {
+              console.error('Error fetching admin details:', adminError);
+            } else if (adminData) {
+              // Update admin store with complete data
+              useAdminStore.setState({ admin: adminData });
+            }
+          } catch (error) {
+            console.error('Error in admin profile fetch:', error);
           }
         }
 
-        // Fetch user role statistics using the same method as other pages
+        // Fetch user role statistics - separate from admin profile logic
         try {
           const roleData = await UserRolesService.getRoleStats();
           setRoleStats(roleData);
         } catch (error) {
           console.error('Error fetching role stats:', error);
-          // Keep existing values if there's an error
+          // Keep existing roleStats values if there's an error
         }
 
-        // Fetch total users from user_roles table
-        const userCount = roleStats.total;
-
-        // Fetch total doctors (from doctors table if it exists)
-        let doctorCount = 0;
+        // Fetch total users, doctors, appointments, and reports in parallel
         try {
-          const { count: doctorsCount } = await supabase
-            .from('doctors')
-            .select('*', { count: 'exact' });
-          doctorCount = doctorsCount || 0;
-        } catch (error) {
-          console.warn('Doctors table not accessible:', error);
-          doctorCount = roleStats.doctors; // Fallback to role data
-        }
+          const promises = [
+            // Get total users from user_roles table
+            async () => {
+              try {
+                const stats = await UserRolesService.getRoleStats();
+                return stats.total;
+              } catch (error) {
+                console.error('Error fetching total users:', error);
+                return 0;
+              }
+            },
+            
+            // Get doctors count - try doctors table first, fallback to role data
+            async () => {
+              try {
+                const { count, error } = await supabase
+                  .from('doctors')
+                  .select('*', { count: 'exact' });
+                if (error) throw error;
+                return count || 0;
+              } catch (error) {
+                console.warn('Doctors table not accessible, using role data fallback:', error);
+                return roleStats.doctors; // Fallback to role data
+              }
+            },
+            
+            // Get appointments count
+            async () => {
+              try {
+                const { count, error } = await supabase
+                  .from('pending_appointments')
+                  .select('*', { count: 'exact' });
+                if (error) throw error;
+                return count || 0;
+              } catch (error) {
+                console.warn('Pending appointments table not accessible:', error);
+                return 0;
+              }
+            },
+            
+            // Get reports count
+            async () => {
+              try {
+                const { count, error } = await supabase
+                  .from('mental_state_reports')
+                  .select('*', { count: 'exact' });
+                if (error) throw error;
+                return count || 0;
+              } catch (error) {
+                console.warn('Mental state reports table not accessible:', error);
+                return 0;
+              }
+            }
+          ];
 
-        // Fetch total appointments (from appointments table if it exists)
-        let appointmentCount = 0;
-        try {
-          const { count: appointmentsCount } = await (supabase as any)
-            .from('appointments')
-            .select('*', { count: 'exact' });
-          appointmentCount = appointmentsCount || 0;
-        } catch (error) {
-          console.warn('Appointments table not accessible:', error);
-          appointmentCount = 0;
-        }
+          const results = await Promise.allSettled(promises.map(p => p()));
 
-        // Fetch total reports (from reports table if it exists)
-        let reportCount = 0;
-        try {
-          const { count: reportsCount } = await (supabase as any)
-            .from('reports')
-            .select('*', { count: 'exact' });
-          reportCount = reportsCount || 0;
+          setStats({
+            totalUsers: results[0]?.status === 'fulfilled' ? results[0].value : 0,
+            totalDoctors: results[1]?.status === 'fulfilled' ? results[1].value : 0,
+            totalAppointments: results[2]?.status === 'fulfilled' ? results[2].value : 0,
+            totalReports: results[3]?.status === 'fulfilled' ? results[3].value : 0,
+          });
         } catch (error) {
-          console.warn('Reports table not accessible:', error);
-          reportCount = 0;
+          console.error('Error fetching dashboard stats:', error);
         }
-
-        setStats({
-          totalUsers: userCount,
-          totalDoctors: doctorCount,
-          totalAppointments: appointmentCount,
-          totalReports: reportCount,
-        });
 
       } catch (error) {
-        console.error('Error fetching dashboard stats:', error);
+        console.error('Error in fetchStats:', error);
       } finally {
         setLoading(false);
       }
     };
 
     fetchStats();
-  }, [admin?.id, roleStats.total]);
+  }, [admin?.id, roleStats.doctors]);
 
   if (loading) {
     return (
@@ -198,7 +223,7 @@ const Dashboard = () => {
               <div className="ml-4">
                 <dt className="text-sm font-medium text-gray-500 truncate">Total Appointments</dt>
                 <dd className="text-2xl font-bold text-gray-900">{stats.totalAppointments}</dd>
-                <dd className="text-xs text-gray-400">From appointments table</dd>
+                <dd className="text-xs text-gray-400">From pending_appointments table</dd>
               </div>
             </div>
           </div>
@@ -217,7 +242,7 @@ const Dashboard = () => {
               <div className="ml-4">
                 <dt className="text-sm font-medium text-gray-500 truncate">Total Reports</dt>
                 <dd className="text-2xl font-bold text-gray-900">{stats.totalReports}</dd>
-                <dd className="text-xs text-gray-400">From reports table</dd>
+                <dd className="text-xs text-gray-400">From mental_state_reports table</dd>
               </div>
             </div>
           </div>
@@ -234,7 +259,7 @@ const Dashboard = () => {
           </div>
           <h3 className="text-xl font-bold text-gray-900">User Role Distribution</h3>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           <div className="text-center p-3 bg-green-50 rounded-lg">
             <div className="text-2xl font-bold text-green-600">{roleStats.patients}</div>
             <div className="text-sm text-green-800">Patients</div>
@@ -247,10 +272,6 @@ const Dashboard = () => {
             <div className="text-2xl font-bold text-purple-600">{roleStats.admins}</div>
             <div className="text-sm text-purple-800">Admins</div>
           </div>
-          <div className="text-center p-3 bg-red-50 rounded-lg">
-            <div className="text-2xl font-bold text-red-600">{roleStats.superadmins}</div>
-            <div className="text-sm text-red-800">Super Admins</div>
-          </div>
           <div className="text-center p-3 bg-gray-50 rounded-lg">
             <div className="text-2xl font-bold text-gray-600">{roleStats.total}</div>
             <div className="text-sm text-gray-800">Total Roles</div>
@@ -258,13 +279,12 @@ const Dashboard = () => {
         </div>
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart 
+            <BarChart
               data={[
                 { name: 'Patients', count: roleStats.patients },
                 { name: 'Doctors', count: roleStats.doctors },
                 { name: 'Admins', count: roleStats.admins },
-                { name: 'Super Admins', count: roleStats.superadmins },
-              ]} 
+              ]}
               margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
             >
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -303,8 +323,8 @@ const Dashboard = () => {
           <ul className="mt-1 space-y-1">
             <li>• Users & Roles: <code>user_roles</code> table (primary source)</li>
             <li>• Doctors: <code>doctors</code> table (fallback to role data)</li>
-            <li>• Appointments: <code>appointments</code> table</li>
-            <li>• Reports: <code>reports</code> table</li>
+            <li>• Appointments: <code>pending_appointments</code> table</li>
+            <li>• Reports: <code>mental_state_reports</code> table</li>
           </ul>
         </div>
       </div>

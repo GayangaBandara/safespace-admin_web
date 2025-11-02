@@ -1,9 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { UserRolesService, type UserRoleDisplay } from '../lib/userRolesService';
-import { useAdminStore } from '../store/adminStore';
 
 const AdminManagement = () => {
-  const { admin: currentAdmin } = useAdminStore();
   const [userRoles, setUserRoles] = useState<UserRoleDisplay[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -13,8 +11,7 @@ const AdminManagement = () => {
     total: 0,
     patients: 0,
     doctors: 0,
-    admins: 0,
-    superadmins: 0
+    admins: 0
   });
   const [savingRoles, setSavingRoles] = useState<Set<string>>(new Set());
 
@@ -26,10 +23,12 @@ const AdminManagement = () => {
   const fetchUserRoles = async () => {
     try {
       setLoading(true);
+      setError(null);
       const data = await UserRolesService.getAllUserRoles();
       setUserRoles(data);
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'Failed to fetch user roles');
+      const errorMsg = error instanceof Error ? error.message : 'Failed to fetch user roles';
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -61,7 +60,7 @@ const AdminManagement = () => {
     filterUserRoles();
   }, [filterUserRoles]);
 
-  const handleRoleUpdate = async (userId: string, newRole: 'patient' | 'doctor' | 'admin' | 'superadmin') => {
+  const handleRoleUpdate = async (userId: string, newRole: 'patient' | 'doctor' | 'admin') => {
     try {
       setSavingRoles(prev => new Set(prev).add(userId));
       await UserRolesService.updateUserRole(userId, newRole);
@@ -91,8 +90,7 @@ const AdminManagement = () => {
     const roleConfig = {
       patient: { label: 'Patient (Main App)', className: 'bg-green-100 text-green-800' },
       doctor: { label: 'Doctor (Doctor App)', className: 'bg-blue-100 text-blue-800' },
-      admin: { label: 'Admin (Admin Web)', className: 'bg-purple-100 text-purple-800' },
-      superadmin: { label: 'Super Admin (Admin Web)', className: 'bg-red-100 text-red-800' }
+      admin: { label: 'Admin (Admin Web)', className: 'bg-purple-100 text-purple-800' }
     };
 
     const config = roleConfig[role as keyof typeof roleConfig] || { label: role, className: 'bg-gray-100 text-gray-800' };
@@ -108,55 +106,6 @@ const AdminManagement = () => {
     return `${uid.substring(0, 8)}...`;
   };
 
-  // Check if current user has admin role
-  const currentUserRole = currentAdmin?.role;
-  const isAdmin = currentUserRole === 'superadmin' || currentUserRole === 'moderator';
-
-  if (loading) {
-    return (
-      <div className="space-y-6">
-        <div className="bg-white shadow rounded-lg">
-          <div className="px-4 py-5 sm:p-6">
-            <div className="animate-pulse">
-              <div className="h-8 bg-gray-200 rounded w-1/4 mb-4"></div>
-              <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
-                {[...Array(5)].map((_, i) => (
-                  <div key={i} className="h-20 bg-gray-200 rounded"></div>
-                ))}
-              </div>
-              <div className="space-y-3">
-                {[...Array(5)].map((_, i) => (
-                  <div key={i} className="h-16 bg-gray-200 rounded"></div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Check access permissions
-  if (!isAdmin) {
-    return (
-      <div className="space-y-6">
-        <div className="bg-white shadow rounded-lg">
-          <div className="px-4 py-5 sm:p-6">
-            <div className="text-center py-12">
-              <svg className="mx-auto h-12 w-12 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-              <h3 className="mt-2 text-sm font-medium text-gray-900">Access Denied</h3>
-              <p className="mt-1 text-sm text-gray-500">
-                You need admin privileges to access this page.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -170,11 +119,14 @@ const AdminManagement = () => {
               </p>
             </div>
             <button
-              onClick={fetchUserRoles}
+              onClick={() => {
+                fetchUserRoles();
+                fetchStats();
+              }}
               className="btn-secondary"
               disabled={loading}
             >
-              Refresh
+              Refresh All
             </button>
           </div>
         </div>
@@ -196,9 +148,9 @@ const AdminManagement = () => {
                 <div className="bg-red-100 p-3 rounded-md mt-2">
                   <h4 className="font-semibold text-red-800 mb-1">Solution:</h4>
                   <ol className="list-decimal list-inside text-red-700 space-y-1">
-                    <li>Apply the database migration: <code className="bg-red-200 px-1 rounded">supabase/db reset</code></li>
-                    <li>Or manually run: <code className="bg-red-200 px-1 rounded">supabase migration up</code></li>
-                    <li>Migration file: <code className="bg-red-200 px-1 rounded">supabase/migrations/00009_create_user_roles_table.sql</code></li>
+                    <li>Run the debug script: <code className="bg-red-200 px-1 rounded">debug_user_roles.sql</code></li>
+                    <li>Apply migrations in Supabase dashboard</li>
+                    <li>Ensure user_roles table has the correct data</li>
                   </ol>
                 </div>
               </div>
@@ -220,7 +172,7 @@ const AdminManagement = () => {
       )}
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-white overflow-hidden shadow rounded-lg">
           <div className="p-5">
             <div className="flex items-center">
@@ -292,24 +244,6 @@ const AdminManagement = () => {
             </div>
           </div>
         </div>
-
-        <div className="bg-white overflow-hidden shadow rounded-lg">
-          <div className="p-5">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <svg className="h-6 w-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                </svg>
-              </div>
-              <div className="ml-5 w-0 flex-1">
-                <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">Super Admins</dt>
-                  <dd className="text-lg font-medium text-red-600">{stats.superadmins}</dd>
-                </dl>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* Search and Filters */}
@@ -340,7 +274,12 @@ const AdminManagement = () => {
           </div>
 
           {/* User Roles Table */}
-          {filteredUserRoles.length === 0 ? (
+          {loading ? (
+            <div className="text-center py-12">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+              <p className="mt-4 text-gray-500">Loading user roles...</p>
+            </div>
+          ) : filteredUserRoles.length === 0 ? (
             <div className="text-center py-12">
               <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
@@ -393,14 +332,13 @@ const AdminManagement = () => {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <select
                           value={role.role}
-                          onChange={(e) => handleRoleUpdate(role.user_id, e.target.value as 'patient' | 'doctor' | 'admin' | 'superadmin')}
+                          onChange={(e) => handleRoleUpdate(role.user_id, e.target.value as 'patient' | 'doctor' | 'admin')}
                           disabled={savingRoles.has(role.user_id)}
                           className="text-xs border border-gray-300 rounded px-2 py-1 disabled:opacity-50"
                         >
                           <option value="patient">Patient (Main App)</option>
                           <option value="doctor">Doctor (Doctor App)</option>
                           <option value="admin">Admin (Admin Web)</option>
-                          <option value="superadmin">Super Admin (Admin Web)</option>
                         </select>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">

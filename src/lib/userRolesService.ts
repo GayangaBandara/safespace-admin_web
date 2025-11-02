@@ -4,7 +4,7 @@ import type { UserRole } from '../types/supabase';
 export interface UserRoleDisplay {
   id: string;
   user_id: string;
-  role: 'patient' | 'doctor' | 'admin' | 'superadmin';
+  role: 'patient' | 'doctor' | 'admin';
   created_at: string;
   updated_at: string;
 }
@@ -211,7 +211,6 @@ export class UserRolesService {
     patients: number;
     doctors: number;
     admins: number;
-    superadmins: number;
   }> {
     try {
       // Get all user roles for statistics
@@ -221,8 +220,7 @@ export class UserRolesService {
         total: userRoles.length,
         patients: userRoles.filter(u => u.role === 'patient').length,
         doctors: userRoles.filter(u => u.role === 'doctor').length,
-        admins: userRoles.filter(u => u.role === 'admin').length,
-        superadmins: userRoles.filter(u => u.role === 'superadmin').length
+        admins: userRoles.filter(u => u.role === 'admin').length
       };
 
       return stats;
@@ -233,8 +231,7 @@ export class UserRolesService {
           total: 0,
           patients: 0,
           doctors: 0,
-          admins: 0,
-          superadmins: 0
+          admins: 0
         };
       }
       throw error;

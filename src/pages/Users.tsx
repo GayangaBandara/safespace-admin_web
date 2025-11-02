@@ -66,7 +66,7 @@ const Users = () => {
     filterUserRoles();
   }, [filterUserRoles]);
 
-  const handleRoleUpdate = async (userId: string, newRole: 'patient' | 'doctor' | 'admin' | 'superadmin') => {
+  const handleRoleUpdate = async (userId: string, newRole: 'patient' | 'doctor' | 'admin') => {
     try {
       setActionLoading(userId);
       await UserRolesService.updateUserRole(userId, newRole);
@@ -388,7 +388,7 @@ const Users = () => {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <select
                           value={role.role}
-                          onChange={(e) => handleRoleUpdate(role.user_id, e.target.value as 'patient' | 'doctor' | 'admin' | 'superadmin')}
+                          onChange={(e) => handleRoleUpdate(role.user_id, e.target.value as 'patient' | 'doctor' | 'admin')}
                           disabled={actionLoading === role.user_id}
                           className="text-xs border border-gray-300 rounded px-2 py-1 disabled:opacity-50"
                         >

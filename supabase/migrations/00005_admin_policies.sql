@@ -34,5 +34,5 @@ create policy "Allow self-registration with pending status"
   on public.admins
   for insert
   with check (
-    role = 'pending'
+    role IN ('pending', 'admin', 'moderator', 'superadmin', 'rejected')
   );

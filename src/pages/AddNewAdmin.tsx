@@ -9,7 +9,7 @@ const AddNewAdmin = () => {
     password: '',
     confirmPassword: '',
     fullName: '',
-    role: 'moderator',
+    role: 'admin' as 'superadmin' | 'admin' | 'moderator',
   });
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -45,16 +45,24 @@ const AddNewAdmin = () => {
       setLoading(true);
       setError(null);
       
+      console.log('AddNewAdmin: Starting signup with data:', {
+        email: formData.email,
+        fullName: formData.fullName,
+        role: formData.role
+      });
+      
       // Create admin account directly (no email verification required for admin-created accounts)
-      await AdminService.signup(formData.email, formData.password, formData.fullName, formData.role as 'pending' | 'moderator' | 'superadmin');
+      const result = await AdminService.signup(formData.email, formData.password, formData.fullName, formData.role);
+      
+      console.log('AddNewAdmin: Signup successful:', result);
 
-      setSuccessMessage(`Admin account created successfully for ${formData.email}! The admin will be able to sign in immediately.`);
+      setSuccessMessage(`Admin account created successfully for ${formData.email} with ${formData.role} role!`);
       setFormData({
         email: '',
         password: '',
         confirmPassword: '',
         fullName: '',
-        role: 'moderator',
+        role: 'admin',
       });
       
       // Redirect to manage admins page after 2 seconds
@@ -62,7 +70,10 @@ const AddNewAdmin = () => {
         navigate('/admin/manage');
       }, 2000);
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'An error occurred');
+      console.error('AddNewAdmin: Signup failed with error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'An error occurred';
+      console.error('AddNewAdmin: Error message:', errorMessage);
+      setError(`Signup failed: ${errorMessage}`);
     } finally {
       setLoading(false);
     }
@@ -140,11 +151,12 @@ const AddNewAdmin = () => {
                   className="input-field"
                   required
                 >
+                  <option value="admin">Admin</option>
                   <option value="moderator">Moderator</option>
-                  <option value="superadmin">Super Admin</option>
+                  <option value="superadmin">Superadmin</option>
                 </select>
                 <p className="mt-1 text-xs text-gray-500">
-                  Super Admin has full system access, Moderator has limited access
+                  All admin accounts have full system access
                 </p>
               </div>
 
