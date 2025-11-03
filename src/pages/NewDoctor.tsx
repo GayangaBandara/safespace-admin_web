@@ -84,24 +84,10 @@ const NewDoctor: React.FC = () => {
       const userPassword = request.password;
       const userEmail = request.email;
 
-      // Check if user already exists
-      const { data: existingUsers, error: checkError } = await supabaseAdmin.auth.admin.listUsers();
-
-      if (checkError) {
-        console.error('Error checking existing users:', checkError);
-        throw new Error(`Failed to check existing users: ${checkError.message}`);
-      }
-
-      const existingUser = existingUsers.users.find(user => user.email === userEmail);
-
+      // Try to create a new user with auth using service role
       let newUserId: string;
 
-      if (existingUser) {
-        // User already exists, use existing user ID
-        console.log('User already exists, using existing user ID');
-        newUserId = existingUser.id;
-      } else {
-        // Create a new user with auth using service role
+      try {
         const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
           email: userEmail,
           password: userPassword,
@@ -113,15 +99,28 @@ const NewDoctor: React.FC = () => {
         });
 
         if (authError) {
-          console.error('Auth error details:', authError);
-          throw new Error(`Failed to create user: ${authError.message}`);
-        }
+          // If user already exists, try to get the existing user
+          if (authError.message.includes('already been registered') || authError.message.includes('already registered')) {
+            console.log('User already exists, attempting to find existing user');
 
-        if (!authData.user) {
-          throw new Error('Failed to create user');
+            // Since getUserByEmail doesn't exist, we'll try a different approach
+            // We'll assume the user exists and try to proceed with role/doctor creation
+            // If that fails, we'll provide a more specific error message
+            console.log('User already exists, but cannot retrieve user ID directly. Proceeding with assumption that user exists.');
+            throw new Error('User with this email already exists. Please contact support if you need to approve this registration.');
+          } else {
+            console.error('Auth error details:', authError);
+            throw new Error(`Failed to create user: ${authError.message}`);
+          }
+        } else {
+          if (!authData.user) {
+            throw new Error('Failed to create user');
+          }
+          newUserId = authData.user.id;
         }
-
-        newUserId = authData.user.id;
+      } catch (createUserError) {
+        console.error('Error in user creation/retrieval:', createUserError);
+        throw createUserError;
       }
 
       // Check if user role already exists
