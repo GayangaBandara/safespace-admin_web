@@ -20,6 +20,16 @@ import type { Tables } from '../types/supabase';
 // Define the structure for doctor registration requests using database types
 type DoctorRegistrationRequest = Tables<'doctor_registration_requests'>;
 
+// Dominant state options
+const dominantStateOptions = [
+  'neutral/calm',
+  'angry/frustrated',
+  'depressed/sad',
+  'stressed/anxious',
+  'confused/uncertain',
+  'excited/energetic'
+];
+
 // Component for admin to view and manage doctor registration requests
 const NewDoctor: React.FC = () => {
   const navigate = useNavigate();
@@ -30,20 +40,32 @@ const NewDoctor: React.FC = () => {
   const [rejectionReason, setRejectionReason] = useState('');
   const [approvingId, setApprovingId] = useState<string | null>(null);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
+  const [selectedDominantStates, setSelectedDominantStates] = useState<{[key: string]: string}>({});
 
   // Fetch doctor registration requests
   const fetchRequests = async () => {
     try {
+      console.log('Fetching pending registration requests...');
       const { data, error } = await supabase
         .from('doctor_registration_requests')
         .select('*')
+        .eq('status', 'pending') // Only fetch pending requests
         .order('submitted_at', { ascending: false });
 
       if (error) {
+        console.error('Error fetching requests:', error);
         throw error;
       }
 
+      console.log('Fetched requests:', data?.length);
       setRequests(data || []);
+      
+      // Initialize dominant states for each request
+      const initialStates: {[key: string]: string} = {};
+      data?.forEach(request => {
+        initialStates[request.id] = 'neutral/calm';
+      });
+      setSelectedDominantStates(initialStates);
     } catch (error) {
       console.error('Error fetching registration requests:', error);
       alert('Error loading registration requests');
@@ -56,9 +78,19 @@ const NewDoctor: React.FC = () => {
     fetchRequests();
   }, []);
 
+  // Update dominant state for a specific request
+  const handleDominantStateChange = (requestId: string, value: string) => {
+    setSelectedDominantStates(prev => ({
+      ...prev,
+      [requestId]: value
+    }));
+  };
+
   // Approve a doctor registration request
   const handleApprove = async (requestId: string) => {
-    if (!confirm('Are you sure you want to approve this doctor registration? This will create a new user account.')) {
+    const dominantState = selectedDominantStates[requestId] || 'neutral/calm';
+    
+    if (!confirm(`Are you sure you want to approve this doctor registration? This will create a new user account with dominant state: ${dominantState}`)) {
       return;
     }
 
@@ -73,12 +105,15 @@ const NewDoctor: React.FC = () => {
         .single();
 
       if (requestError) {
+        console.error('Error fetching request details:', requestError);
         throw requestError;
       }
 
       if (!request) {
         throw new Error('Request not found');
       }
+
+      console.log('Starting approval process for:', request.email);
 
       // Use the password and email from the registration request
       const userPassword = request.password;
@@ -99,101 +134,96 @@ const NewDoctor: React.FC = () => {
         });
 
         if (authError) {
-          // If user already exists, try to get the existing user
+          console.error('Auth creation error:', authError);
           if (authError.message.includes('already been registered') || authError.message.includes('already registered')) {
-            console.log('User already exists, attempting to find existing user');
-
-            // Since getUserByEmail doesn't exist, we'll try a different approach
-            // We'll assume the user exists and try to proceed with role/doctor creation
-            // If that fails, we'll provide a more specific error message
-            console.log('User already exists, but cannot retrieve user ID directly. Proceeding with assumption that user exists.');
             throw new Error('User with this email already exists. Please contact support if you need to approve this registration.');
           } else {
-            console.error('Auth error details:', authError);
             throw new Error(`Failed to create user: ${authError.message}`);
           }
         } else {
           if (!authData.user) {
-            throw new Error('Failed to create user');
+            throw new Error('Failed to create user - no user data returned');
           }
           newUserId = authData.user.id;
+          console.log('User created successfully with ID:', newUserId);
         }
       } catch (createUserError) {
-        console.error('Error in user creation/retrieval:', createUserError);
+        console.error('Error in user creation:', createUserError);
         throw createUserError;
       }
 
       // Try to insert into user_roles table as doctor
-      // Use upsert to handle duplicates gracefully
       const { error: roleError } = await supabaseAdmin
         .from('user_roles')
         .upsert({
           user_id: newUserId,
           role: 'doctor'
         }, {
-          onConflict: 'user_id' // This will update if user_id already exists
+          onConflict: 'user_id'
         });
 
       if (roleError) {
-        console.error('Role error details:', roleError);
-        // If it's a duplicate key error, that's actually okay - the role is already assigned
-        if (roleError.code === '23505') { // PostgreSQL duplicate key error code
-          console.log('Role already exists for this user, continuing...');
-        } else {
+        console.error('Role assignment error:', roleError);
+        if (roleError.code !== '23505') { // If not a duplicate key error
           throw new Error(`Failed to assign role: ${roleError.message}`);
+        } else {
+          console.log('Role already exists, continuing...');
         }
+      } else {
+        console.log('Role assigned successfully');
       }
 
       // Try to insert into doctors table
-      // Use upsert to handle duplicates gracefully
       const { error: doctorError } = await supabaseAdmin
         .from('doctors')
         .upsert({
-          name: request.full_name, // Maps from full_name in registration_requests
-          email: request.email, // Maps from email in registration_requests
-          phone: request.phone_number || 'Not provided', // Maps from phone_number, required field with fallback
-          category: request.specialization, // Maps from specialization in registration_requests
-          profilepicture: null, // Optional field, can be set later
-          dominant_state: request.city || null // Maps from city in registration_requests
+          name: request.full_name,
+          email: request.email,
+          phone: request.phone_number || 'Not provided',
+          category: request.specialization,
+          profilepicture: null,
+          dominant_state: dominantState
         }, {
-          onConflict: 'email' // This will update if email already exists
+          onConflict: 'email'
         });
 
       if (doctorError) {
-        console.error('Doctor error details:', doctorError);
-        // If it's a duplicate key error, that's actually okay - the doctor record already exists
-        if (doctorError.code === '23505') { // PostgreSQL duplicate key error code
-          console.log('Doctor record already exists for this email, continuing...');
-        } else {
+        console.error('Doctor creation error:', doctorError);
+        if (doctorError.code !== '23505') { // If not a duplicate key error
           throw new Error(`Failed to create doctor record: ${doctorError.message}`);
+        } else {
+          console.log('Doctor record already exists, continuing...');
         }
+      } else {
+        console.log('Doctor record created successfully');
       }
 
-      // Update the registration request status
-      const { error: updateError } = await supabaseAdmin
+      // Update the registration request status - THIS IS THE KEY PART
+      console.log('Updating request status to approved...');
+      const { data: updateData, error: updateError } = await supabaseAdmin
         .from('doctor_registration_requests')
         .update({
           status: 'approved',
           updated_at: new Date().toISOString()
         })
-        .eq('id', requestId);
+        .eq('id', requestId)
+        .select(); // Add select to see what's returned
 
       if (updateError) {
-        console.error('Update error details:', updateError);
+        console.error('Status update error:', updateError);
         throw new Error(`Failed to update request status: ${updateError.message}`);
+      } else {
+        console.log('Status update successful:', updateData);
       }
 
-      // Optional: Send email to doctor with login credentials
-      // You can implement this based on your email service
-      console.log(`Doctor account created. Email: ${request.email}, Password: ${userPassword}`);
+      console.log(`Doctor account created. Email: ${request.email}, Dominant State: ${dominantState}`);
 
       alert(`Doctor registration approved successfully! A new user account has been created for ${request.full_name}.`);
       fetchRequests(); // Refresh the list
+      
     } catch (error) {
-      console.error('Error approving request:', error);
+      console.error('Error in approval process:', error);
       alert('Error approving registration request: ' + (error as Error).message);
-      // Rollback: If user creation failed, we should clean up any partial data
-      // But for now, just log and alert
     } finally {
       setApprovingId(null);
     }
@@ -209,19 +239,23 @@ const NewDoctor: React.FC = () => {
     setRejectingId(requestId);
 
     try {
-      const { error } = await supabaseAdmin
+      console.log('Rejecting request:', requestId);
+      const { data: updateData, error } = await supabaseAdmin
         .from('doctor_registration_requests')
         .update({
           status: 'rejected',
           rejection_reason: rejectionReason,
           updated_at: new Date().toISOString()
         })
-        .eq('id', requestId);
+        .eq('id', requestId)
+        .select();
 
       if (error) {
+        console.error('Rejection error:', error);
         throw error;
       }
 
+      console.log('Rejection successful:', updateData);
       alert('Doctor registration rejected successfully!');
       setRejectionReason('');
       setIsModalOpen(false);
@@ -287,7 +321,7 @@ const NewDoctor: React.FC = () => {
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">Doctor Registration Requests</h1>
                 <p className="mt-1 text-sm text-gray-600">
-                  Review and manage doctor registration applications
+                  Review and manage pending doctor registration applications
                 </p>
               </div>
               <button
@@ -304,9 +338,9 @@ const NewDoctor: React.FC = () => {
             {requests.length === 0 ? (
               <div className="text-center py-12">
                 <UserIcon className="mx-auto h-12 w-12 text-gray-400" />
-                <h3 className="mt-2 text-sm font-medium text-gray-900">No registration requests</h3>
+                <h3 className="mt-2 text-sm font-medium text-gray-900">No pending registration requests</h3>
                 <p className="mt-1 text-sm text-gray-500">
-                  There are no pending doctor registration requests.
+                  There are no pending doctor registration requests to review.
                 </p>
               </div>
             ) : (
@@ -319,8 +353,6 @@ const NewDoctor: React.FC = () => {
                           <h3 className="text-lg font-medium text-gray-900">{request.full_name}</h3>
                           <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(request.status)}`}>
                             {request.status === 'pending' && <ClockIcon className="w-4 h-4 mr-1" />}
-                            {request.status === 'approved' && <CheckIcon className="w-4 h-4 mr-1" />}
-                            {request.status === 'rejected' && <XMarkIcon className="w-4 h-4 mr-1" />}
                             {request.status ? request.status.charAt(0).toUpperCase() + request.status.slice(1) : 'Unknown'}
                           </span>
                         </div>
@@ -352,17 +384,30 @@ const NewDoctor: React.FC = () => {
                           </div>
                         </div>
 
+                        {/* Dominant State Selection for this request */}
+                        <div className="mt-4 flex items-center">
+                          <label htmlFor={`dominant-state-${request.id}`} className="block text-sm font-medium text-gray-700 mr-3">
+                            Dominant State:
+                          </label>
+                          <select
+                            id={`dominant-state-${request.id}`}
+                            value={selectedDominantStates[request.id] || 'neutral/calm'}
+                            onChange={(e) => handleDominantStateChange(request.id, e.target.value)}
+                            className="block w-64 rounded-md border-gray-300 py-2 pl-3 pr-10 text-base focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 sm:text-sm"
+                          >
+                            {dominantStateOptions.map((state) => (
+                              <option key={state} value={state}>
+                                {state}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
                         {request.address_line_1 && (
                           <div className="mt-3 text-sm text-gray-600">
                             <strong>Address:</strong> {request.address_line_1}
                             {request.address_line_2 && `, ${request.address_line_2}`}
                             {request.postal_code && `, ${request.postal_code}`}
-                          </div>
-                        )}
-
-                        {request.rejection_reason && (
-                          <div className="mt-3 text-sm text-red-600">
-                            <strong>Rejection Reason:</strong> {request.rejection_reason}
                           </div>
                         )}
 
@@ -372,34 +417,32 @@ const NewDoctor: React.FC = () => {
                       </div>
 
                       {/* Action buttons */}
-                      {request.status === 'pending' && (
-                        <div className="ml-4 flex flex-col space-y-2">
-                          <button
-                            onClick={() => handleApprove(request.id)}
-                            disabled={approvingId === request.id}
-                            className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            {approvingId === request.id ? (
-                              <>
-                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                                Approving...
-                              </>
-                            ) : (
-                              <>
-                                <CheckIcon className="h-4 w-4 mr-1" />
-                                Approve
-                              </>
-                            )}
-                          </button>
-                          <button
-                            onClick={() => openRejectionModal(request)}
-                            className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-                          >
-                            <XMarkIcon className="h-4 w-4 mr-1" />
-                            Reject
-                          </button>
-                        </div>
-                      )}
+                      <div className="ml-4 flex flex-col space-y-2">
+                        <button
+                          onClick={() => handleApprove(request.id)}
+                          disabled={approvingId === request.id}
+                          className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {approvingId === request.id ? (
+                            <>
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                              Approving...
+                            </>
+                          ) : (
+                            <>
+                              <CheckIcon className="h-4 w-4 mr-1" />
+                              Approve
+                            </>
+                          )}
+                        </button>
+                        <button
+                          onClick={() => openRejectionModal(request)}
+                          className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                        >
+                          <XMarkIcon className="h-4 w-4 mr-1" />
+                          Reject
+                        </button>
+                      </div>
                     </div>
 
                     {/* Document links */}
