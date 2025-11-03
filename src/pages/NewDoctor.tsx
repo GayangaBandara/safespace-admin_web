@@ -45,7 +45,6 @@ const NewDoctor: React.FC = () => {
   // Fetch doctor registration requests
   const fetchRequests = async () => {
     try {
-      console.log('Fetching pending registration requests...');
       const { data, error } = await supabase
         .from('doctor_registration_requests')
         .select('*')
@@ -53,11 +52,9 @@ const NewDoctor: React.FC = () => {
         .order('submitted_at', { ascending: false });
 
       if (error) {
-        console.error('Error fetching requests:', error);
         throw error;
       }
 
-      console.log('Fetched requests:', data?.length);
       setRequests(data || []);
       
       // Initialize dominant states for each request
@@ -105,15 +102,12 @@ const NewDoctor: React.FC = () => {
         .single();
 
       if (requestError) {
-        console.error('Error fetching request details:', requestError);
         throw requestError;
       }
 
       if (!request) {
         throw new Error('Request not found');
       }
-
-      console.log('Starting approval process for:', request.email);
 
       // Use the password and email from the registration request
       const userPassword = request.password;
@@ -134,7 +128,7 @@ const NewDoctor: React.FC = () => {
         });
 
         if (authError) {
-          console.error('Auth creation error:', authError);
+          // If user already exists, try to get the existing user
           if (authError.message.includes('already been registered') || authError.message.includes('already registered')) {
             throw new Error('User with this email already exists. Please contact support if you need to approve this registration.');
           } else {
@@ -142,13 +136,11 @@ const NewDoctor: React.FC = () => {
           }
         } else {
           if (!authData.user) {
-            throw new Error('Failed to create user - no user data returned');
+            throw new Error('Failed to create user');
           }
           newUserId = authData.user.id;
-          console.log('User created successfully with ID:', newUserId);
         }
       } catch (createUserError) {
-        console.error('Error in user creation:', createUserError);
         throw createUserError;
       }
 
@@ -163,14 +155,9 @@ const NewDoctor: React.FC = () => {
         });
 
       if (roleError) {
-        console.error('Role assignment error:', roleError);
         if (roleError.code !== '23505') { // If not a duplicate key error
           throw new Error(`Failed to assign role: ${roleError.message}`);
-        } else {
-          console.log('Role already exists, continuing...');
         }
-      } else {
-        console.log('Role assigned successfully');
       }
 
       // Try to insert into doctors table
@@ -188,41 +175,28 @@ const NewDoctor: React.FC = () => {
         });
 
       if (doctorError) {
-        console.error('Doctor creation error:', doctorError);
         if (doctorError.code !== '23505') { // If not a duplicate key error
           throw new Error(`Failed to create doctor record: ${doctorError.message}`);
-        } else {
-          console.log('Doctor record already exists, continuing...');
         }
-      } else {
-        console.log('Doctor record created successfully');
       }
 
-      // Update the registration request status - THIS IS THE KEY PART
-      console.log('Updating request status to approved...');
-      const { data: updateData, error: updateError } = await supabaseAdmin
+      // Delete the registration request since it's no longer needed
+      const { error: deleteError } = await supabaseAdmin
         .from('doctor_registration_requests')
-        .update({
-          status: 'approved',
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', requestId)
-        .select(); // Add select to see what's returned
+        .delete()
+        .eq('id', requestId);
 
-      if (updateError) {
-        console.error('Status update error:', updateError);
-        throw new Error(`Failed to update request status: ${updateError.message}`);
-      } else {
-        console.log('Status update successful:', updateData);
+      if (deleteError) {
+        throw new Error(`Failed to delete registration request: ${deleteError.message}`);
       }
-
-      console.log(`Doctor account created. Email: ${request.email}, Dominant State: ${dominantState}`);
 
       alert(`Doctor registration approved successfully! A new user account has been created for ${request.full_name}.`);
-      fetchRequests(); // Refresh the list
+      
+      // Remove the request from the local state immediately
+      setRequests(prev => prev.filter(req => req.id !== requestId));
       
     } catch (error) {
-      console.error('Error in approval process:', error);
+      console.error('Error approving request:', error);
       alert('Error approving registration request: ' + (error as Error).message);
     } finally {
       setApprovingId(null);
@@ -239,28 +213,23 @@ const NewDoctor: React.FC = () => {
     setRejectingId(requestId);
 
     try {
-      console.log('Rejecting request:', requestId);
-      const { data: updateData, error } = await supabaseAdmin
+      // Delete the registration request
+      const { error } = await supabaseAdmin
         .from('doctor_registration_requests')
-        .update({
-          status: 'rejected',
-          rejection_reason: rejectionReason,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', requestId)
-        .select();
+        .delete()
+        .eq('id', requestId);
 
       if (error) {
-        console.error('Rejection error:', error);
         throw error;
       }
 
-      console.log('Rejection successful:', updateData);
       alert('Doctor registration rejected successfully!');
       setRejectionReason('');
       setIsModalOpen(false);
       setSelectedRequest(null);
-      fetchRequests(); // Refresh the list
+      
+      // Remove the request from the local state immediately
+      setRequests(prev => prev.filter(req => req.id !== requestId));
     } catch (error) {
       console.error('Error rejecting request:', error);
       alert('Error rejecting registration request');
