@@ -123,61 +123,48 @@ const NewDoctor: React.FC = () => {
         throw createUserError;
       }
 
-      // Check if user role already exists
-      const { data: existingRole, error: roleCheckError } = await supabaseAdmin
+      // Try to insert into user_roles table as doctor
+      // Use upsert to handle duplicates gracefully
+      const { error: roleError } = await supabaseAdmin
         .from('user_roles')
-        .select('*')
-        .eq('user_id', newUserId)
-        .eq('role', 'doctor')
-        .single();
+        .upsert({
+          user_id: newUserId,
+          role: 'doctor'
+        }, {
+          onConflict: 'user_id' // This will update if user_id already exists
+        });
 
-      if (roleCheckError && roleCheckError.code !== 'PGRST116') { // PGRST116 is "not found"
-        console.error('Error checking existing role:', roleCheckError);
-        throw new Error(`Failed to check existing role: ${roleCheckError.message}`);
-      }
-
-      if (!existingRole) {
-        // Insert into user_roles table as doctor only if it doesn't exist
-        const { error: roleError } = await supabaseAdmin
-          .from('user_roles')
-          .insert({
-            user_id: newUserId,
-            role: 'doctor'
-          });
-
-        if (roleError) {
-          console.error('Role error details:', roleError);
+      if (roleError) {
+        console.error('Role error details:', roleError);
+        // If it's a duplicate key error, that's actually okay - the role is already assigned
+        if (roleError.code === '23505') { // PostgreSQL duplicate key error code
+          console.log('Role already exists for this user, continuing...');
+        } else {
           throw new Error(`Failed to assign role: ${roleError.message}`);
         }
       }
 
-      // Check if doctor record already exists
-      const { data: existingDoctor, error: doctorCheckError } = await supabaseAdmin
+      // Try to insert into doctors table
+      // Use upsert to handle duplicates gracefully
+      const { error: doctorError } = await supabaseAdmin
         .from('doctors')
-        .select('*')
-        .eq('email', request.email)
-        .single();
+        .upsert({
+          name: request.full_name, // Maps from full_name in registration_requests
+          email: request.email, // Maps from email in registration_requests
+          phone: request.phone_number || 'Not provided', // Maps from phone_number, required field with fallback
+          category: request.specialization, // Maps from specialization in registration_requests
+          profilepicture: null, // Optional field, can be set later
+          dominant_state: request.city || null // Maps from city in registration_requests
+        }, {
+          onConflict: 'email' // This will update if email already exists
+        });
 
-      if (doctorCheckError && doctorCheckError.code !== 'PGRST116') { // PGRST116 is "not found"
-        console.error('Error checking existing doctor:', doctorCheckError);
-        throw new Error(`Failed to check existing doctor: ${doctorCheckError.message}`);
-      }
-
-      if (!existingDoctor) {
-        // Insert into doctors table only if it doesn't exist
-        const { error: doctorError } = await supabaseAdmin
-          .from('doctors')
-          .insert({
-            name: request.full_name,
-            email: request.email,
-            phone: request.phone_number || '',
-            category: request.specialization,
-            profilepicture: null, // You can set a default profile picture or leave null
-            dominant_state: request.city || null
-          });
-
-        if (doctorError) {
-          console.error('Doctor error details:', doctorError);
+      if (doctorError) {
+        console.error('Doctor error details:', doctorError);
+        // If it's a duplicate key error, that's actually okay - the doctor record already exists
+        if (doctorError.code === '23505') { // PostgreSQL duplicate key error code
+          console.log('Doctor record already exists for this email, continuing...');
+        } else {
           throw new Error(`Failed to create doctor record: ${doctorError.message}`);
         }
       }
@@ -187,8 +174,7 @@ const NewDoctor: React.FC = () => {
         .from('doctor_registration_requests')
         .update({
           status: 'approved',
-          reviewed_at: new Date().toISOString(),
-          reviewed_by: (await supabase.auth.getUser()).data.user?.id
+          updated_at: new Date().toISOString()
         })
         .eq('id', requestId);
 
@@ -223,13 +209,12 @@ const NewDoctor: React.FC = () => {
     setRejectingId(requestId);
 
     try {
-      const { error } = await supabase
+      const { error } = await supabaseAdmin
         .from('doctor_registration_requests')
         .update({
           status: 'rejected',
           rejection_reason: rejectionReason,
-          reviewed_at: new Date().toISOString(),
-          reviewed_by: (await supabase.auth.getUser()).data.user?.id
+          updated_at: new Date().toISOString()
         })
         .eq('id', requestId);
 
@@ -382,9 +367,8 @@ const NewDoctor: React.FC = () => {
                         )}
 
                         <div className="mt-3 text-xs text-gray-500">
-                          Submitted: {formatDate(request.submitted_at)}
-                          {request.reviewed_at && ` • Reviewed: ${formatDate(request.reviewed_at)}`}
-                        </div>
+                           Submitted: {formatDate(request.submitted_at)}
+                         </div>
                       </div>
 
                       {/* Action buttons */}
