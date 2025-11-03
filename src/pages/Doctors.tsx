@@ -2,19 +2,13 @@ import React, { useState, useEffect } from 'react';
 import {
   Table,
   Button,
-  Modal,
-  Form,
-  Input,
-  Select,
-  message,
-  Upload,
   Space,
   Popconfirm,
-  Tag
+  Tag,
+  message
 } from 'antd';
-import type { UploadFile } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { PlusOutlined, UploadOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { supabase } from '../lib/supabase';
 
 interface Doctor {
@@ -27,8 +21,6 @@ interface Doctor {
   created_at: string | null;
   dominant_state: string | null;
 }
-
-const { Option } = Select;
 
 const categoryOptions = [
   'Psychiatrist',
@@ -56,10 +48,6 @@ const stateOptions = [
 const Doctors: React.FC = () => {
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [loading, setLoading] = useState(false);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [form] = Form.useForm();
-  const [editingDoctor, setEditingDoctor] = useState<Doctor | null>(null);
-  const [fileList, setFileList] = useState<UploadFile[]>([]);
   // useAuth(); // Keep for future authorization checks
 
   // Fetch doctors
@@ -85,81 +73,6 @@ const Doctors: React.FC = () => {
     fetchDoctors();
   }, []);
 
-  // Handle form submission
-  interface DoctorFormValues {
-    name: string;
-    email: string;
-    phone: string;
-    category: string;
-    dominant_state: string;
-  }
-
-  const handleSubmit = async (values: DoctorFormValues) => {
-    try {
-      setLoading(true);
-      let profilePictureUrl = editingDoctor?.profilepicture;
-
-      // Handle file upload if there's a new file
-      if (fileList.length > 0) {
-        const file = fileList[0].originFileObj;
-        if (!file) {
-          throw new Error('File is required');
-        }
-        const fileExt = file.name.split('.').pop() || 'jpg';
-        const fileName = `${Date.now()}_${values.name}.${fileExt}`;
-        const filePath = `profiles/${fileName}`;
-
-        const { error: uploadError } = await supabase.storage
-          .from('doctor_profiles')
-          .upload(filePath, file);
-
-        if (uploadError) throw uploadError;
-
-        const { data: { publicUrl } } = supabase.storage
-          .from('doctor_profiles')
-          .getPublicUrl(filePath);
-
-        profilePictureUrl = publicUrl;
-      }
-
-      if (editingDoctor) {
-        // Update existing doctor
-        const { error } = await supabase
-          .from('doctors')
-          .update({
-            ...values,
-            profilepicture: profilePictureUrl
-          })
-          .eq('id', editingDoctor.id);
-
-        if (error) throw error;
-        message.success('Doctor updated successfully');
-      } else {
-        // Create new doctor
-        const { error } = await supabase
-          .from('doctors')
-          .insert([{
-            ...values,
-            profilepicture: profilePictureUrl
-          }]);
-
-        if (error) throw error;
-        message.success('Doctor added successfully');
-      }
-
-      setModalVisible(false);
-      form.resetFields();
-      setFileList([]);
-      setEditingDoctor(null);
-      fetchDoctors();
-    } catch (error) {
-      message.error('Error saving doctor');
-      console.error('Error:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   // Handle doctor deletion
   const handleDelete = async (id: number) => {
     try {
@@ -178,22 +91,6 @@ const Doctors: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  // Handle edit button click
-  const handleEdit = (record: Doctor) => {
-    setEditingDoctor(record);
-    form.setFieldsValue(record);
-    if (record.profilepicture) {
-      const uploadFile: UploadFile = {
-        uid: '-1',
-        name: 'Current Profile Picture',
-        status: 'done' as const,
-        url: record.profilepicture,
-      };
-      setFileList([uploadFile]);
-    }
-    setModalVisible(true);
   };
 
   const columns = [
@@ -269,7 +166,10 @@ const Doctors: React.FC = () => {
           <Button
             type="primary"
             icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
+            onClick={() => {
+              // Edit functionality can be implemented here if needed
+              message.info('Edit functionality would go here');
+            }}
             className="bg-indigo-500 hover:bg-indigo-600 border-none shadow-sm"
           >
             Edit
@@ -309,22 +209,7 @@ const Doctors: React.FC = () => {
                 Refresh
               </Button>
             </div>
-            <p className="text-gray-600 mt-1">Add, edit, and manage doctor profiles</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              className="bg-[#1677ff] hover:bg-blue-600 border-none flex items-center"
-              onClick={() => {
-                setEditingDoctor(null);
-                form.resetFields();
-                setFileList([]);
-                setModalVisible(true);
-              }}
-            >
-              Add New Doctor
-            </Button>
+            <p className="text-gray-600 mt-1">View and manage doctor profiles</p>
           </div>
         </div>
 
@@ -345,7 +230,7 @@ const Doctors: React.FC = () => {
             <div className="flex items-center justify-between">
               <h3 className="text-base font-medium text-gray-900">Psychiatrists</h3>
               <span className="bg-indigo-50 text-indigo-600 py-1 px-2 rounded-md text-sm font-medium">
-                {((doctors.filter(d => d.category === 'Psychiatrist').length / doctors.length) * 100).toFixed(0)}%
+                {doctors.length > 0 ? ((doctors.filter(d => d.category === 'Psychiatrist').length / doctors.length) * 100).toFixed(0) : 0}%
               </span>
             </div>
             <p className="text-2xl font-semibold text-indigo-600 mt-2">
@@ -358,7 +243,7 @@ const Doctors: React.FC = () => {
             <div className="flex items-center justify-between">
               <h3 className="text-base font-medium text-gray-900">Psychologists</h3>
               <span className="bg-green-50 text-green-600 py-1 px-2 rounded-md text-sm font-medium">
-                {((doctors.filter(d => ['ClinicalPsychologist', 'CounsellingPsychologist'].includes(d.category)).length / doctors.length) * 100).toFixed(0)}%
+                {doctors.length > 0 ? ((doctors.filter(d => ['ClinicalPsychologist', 'CounsellingPsychologist'].includes(d.category)).length / doctors.length) * 100).toFixed(0) : 0}%
               </span>
             </div>
             <p className="text-2xl font-semibold text-green-600 mt-2">
@@ -371,7 +256,7 @@ const Doctors: React.FC = () => {
             <div className="flex items-center justify-between">
               <h3 className="text-base font-medium text-gray-900">Specialists</h3>
               <span className="bg-purple-50 text-purple-600 py-1 px-2 rounded-md text-sm font-medium">
-                {((doctors.filter(d => !['Psychiatrist', 'ClinicalPsychologist', 'CounsellingPsychologist'].includes(d.category)).length / doctors.length) * 100).toFixed(0)}%
+                {doctors.length > 0 ? ((doctors.filter(d => !['Psychiatrist', 'ClinicalPsychologist', 'CounsellingPsychologist'].includes(d.category)).length / doctors.length) * 100).toFixed(0) : 0}%
               </span>
             </div>
             <p className="text-2xl font-semibold text-purple-600 mt-2">
@@ -397,118 +282,6 @@ const Doctors: React.FC = () => {
           }}
         />
       </div>
-
-      <Modal
-        title={
-          <div className="text-lg font-semibold text-gray-800 pb-3 border-b">
-            {editingDoctor ? 'Edit Doctor Profile' : 'Add New Doctor'}
-          </div>
-        }
-        open={modalVisible}
-        onCancel={() => {
-          setModalVisible(false);
-          form.resetFields();
-          setFileList([]);
-          setEditingDoctor(null);
-        }}
-        footer={null}
-        width={600}
-        className="custom-modal"
-      >
-        <Form
-          form={form}
-          layout="vertical"
-          onFinish={handleSubmit}
-        >
-          <Form.Item
-            name="name"
-            label="Name"
-            rules={[{ required: true, message: 'Please enter the doctor\'s name' }]}
-          >
-            <Input />
-          </Form.Item>
-
-          <Form.Item
-            name="email"
-            label="Email"
-            rules={[
-              { required: true, message: 'Please enter the email' },
-              { type: 'email', message: 'Please enter a valid email' }
-            ]}
-          >
-            <Input />
-          </Form.Item>
-
-          <Form.Item
-            name="phone"
-            label="Phone"
-            rules={[{ required: true, message: 'Please enter the phone number' }]}
-          >
-            <Input />
-          </Form.Item>
-
-          <Form.Item
-            name="category"
-            label="Category"
-            rules={[{ required: true, message: 'Please select a category' }]}
-          >
-            <Select>
-              {categoryOptions.map(category => (
-                <Option key={category} value={category}>{category}</Option>
-              ))}
-            </Select>
-          </Form.Item>
-
-          <Form.Item
-            name="dominant_state"
-            label="Current State"
-            rules={[{ required: true, message: 'Please select the current state' }]}
-          >
-            <Select>
-              {stateOptions.map(state => (
-                <Option key={state} value={state}>{state}</Option>
-              ))}
-            </Select>
-          </Form.Item>
-
-          <Form.Item
-            label="Profile Picture"
-          >
-            <Upload
-              listType="picture"
-              maxCount={1}
-              fileList={fileList}
-              onChange={({ fileList: newFileList }) => setFileList(newFileList)}
-              beforeUpload={() => false}
-            >
-              <Button icon={<UploadOutlined />}>Upload</Button>
-            </Upload>
-          </Form.Item>
-          <Form.Item>
-            <div className="flex justify-end space-x-4">
-              <Button 
-                onClick={() => {
-                  setModalVisible(false);
-                  form.resetFields();
-                  setFileList([]);
-                  setEditingDoctor(null);
-                }}
-                className="min-w-[100px] hover:bg-gray-50"
-              >
-                Cancel
-              </Button>
-              <Button 
-                type="primary" 
-                htmlType="submit" 
-                loading={loading}
-                className="min-w-[100px] bg-blue-500 hover:bg-blue-600 border-none shadow-sm"
-              >
-                {editingDoctor ? 'Update' : 'Add'} Doctor
-              </Button>
-            </div>
-          </Form.Item>
-        </Form>
-      </Modal>
     </div>
   );
 };
