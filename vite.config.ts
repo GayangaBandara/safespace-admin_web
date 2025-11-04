@@ -24,5 +24,11 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: true
+  },
+  preview: {
+    port: 3000,
+    strictPort: true,
+    // Enable SPA fallback for preview
+    host: true
   }
 })
