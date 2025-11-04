@@ -23,12 +23,20 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    sourcemap: true
+    sourcemap: false,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom'],
+          router: ['react-router-dom'],
+          ui: ['antd', '@ant-design/icons']
+        }
+      }
+    }
   },
   preview: {
     port: 3000,
     strictPort: true,
-    // Enable SPA fallback for preview
     host: true
   }
 })
