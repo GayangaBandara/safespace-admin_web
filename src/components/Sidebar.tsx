@@ -19,7 +19,7 @@ const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
   { name: 'Users', href: '/users', icon: UserGroupIcon },
   { name: 'Doctors', href: '/doctors', icon: UserIcon },
-  { name: 'Add Doctors', href: '/newdoctors', icon: PlusCircleIcon },
+  { name: 'Doctor Requests', href: '/newdoctors', icon: PlusCircleIcon },
   { name: 'Reports', href: '/reports', icon: ClipboardIcon },
   { name: 'Analytics', href: '/analytics', icon: ChartBarIcon },
   { name: 'Settings', href: '/settings', icon: CogIcon },
