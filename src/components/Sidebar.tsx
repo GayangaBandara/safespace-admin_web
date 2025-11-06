@@ -12,6 +12,7 @@ import {
   ShieldCheckIcon,
   UserCircleIcon,
   PlusCircleIcon,
+  PlayIcon,
 } from '@heroicons/react/24/outline';
 
 // Define main navigation items with their routes and icons
@@ -19,7 +20,12 @@ const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
   { name: 'Users', href: '/users', icon: UserGroupIcon },
   { name: 'Doctors', href: '/doctors', icon: UserIcon },
+<<<<<<< Updated upstream
   { name: 'Doctor Requests', href: '/newdoctors', icon: PlusCircleIcon },
+=======
+  { name: 'Add Doctors', href: '/newdoctors', icon: PlusCircleIcon },
+  { name: 'Entertainment', href: '/entertainment', icon: PlayIcon },
+>>>>>>> Stashed changes
   { name: 'Reports', href: '/reports', icon: ClipboardIcon },
   { name: 'Analytics', href: '/analytics', icon: ChartBarIcon },
   { name: 'Settings', href: '/settings', icon: CogIcon },
