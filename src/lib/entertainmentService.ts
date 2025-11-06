@@ -16,6 +16,18 @@ export interface EntertainmentItem {
   dominant_state: string | null;
 }
 
+// Database Insert type (matches actual schema)
+export interface EntertainmentInsert {
+  title: string;
+  type: string;
+  category: string;
+  mood_states: string[];
+  status?: string;
+  description?: string | null;
+  cover_img_url?: string | null;
+  media_file_url?: string | null;
+}
+
 export interface EntertainmentStats {
   totalContent: number;
   totalVideos: number;
@@ -79,19 +91,25 @@ export class EntertainmentService {
     try {
       console.log('Creating entertainment with data:', data);
       
-      // Create the exact object structure that matches the database
-      const insertData: any = {
-        title: data.title,
+      // Validate required fields
+      if (!data.title || !data.type || !data.category) {
+        throw new Error('Missing required fields: title, type, or category');
+      }
+
+      // Ensure mood_states is always an array
+      const mood_states = Array.isArray(data.mood_states) ? data.mood_states : [];
+      
+      // Create the exact object structure that matches the database schema
+      const insertData: EntertainmentInsert = {
+        title: data.title.trim(),
         type: data.type,
         category: data.category,
-        mood_states: data.mood_states,
+        mood_states: mood_states,
         status: data.status || 'active',
+        description: data.description?.trim() || null,
+        cover_img_url: data.cover_img_url || null,
+        media_file_url: data.media_file_url || null
       };
-
-      // Only add optional fields if they exist
-      if (data.description) insertData.description = data.description;
-      if (data.cover_img_url) insertData.cover_img_url = data.cover_img_url;
-      if (data.media_file_url) insertData.media_file_url = data.media_file_url;
 
       console.log('Insert data:', insertData);
 
@@ -111,7 +129,7 @@ export class EntertainmentService {
       }
 
       console.log('Entertainment created successfully:', result);
-      return result;
+      return result as EntertainmentItem;
     } catch (error) {
       console.error('Exception in createEntertainment:', error);
       throw error;
@@ -139,7 +157,7 @@ export class EntertainmentService {
       }
 
       console.log('Entertainment updated successfully:', result);
-      return result;
+      return result as EntertainmentItem;
     } catch (error) {
       console.error('Exception in updateEntertainment:', error);
       throw error;
@@ -168,66 +186,46 @@ export class EntertainmentService {
   }
 
   static async uploadFile(
-    bucket: 'entertainment-media' | 'entertainment-covers', 
-    file: File, 
+    folder: 'media' | 'covers',
+    file: File,
     fileName: string
   ): Promise<string> {
     try {
-      console.log(`Uploading file to ${bucket}:`, fileName, 'Size:', file.size);
+      const bucketName = 'entertainment_media';
+      const filePath = `${folder}/${fileName}`;
+      
+      console.log(`Uploading file to ${bucketName}/${folder}:`, fileName, 'Size:', file.size);
 
-      // Check if bucket exists and is accessible
-      const { data: bucketData, error: bucketError } = await supabase.storage
-        .from(bucket)
-        .list('', { limit: 1 });
-
-      if (bucketError) {
-        console.error('Bucket access error:', bucketError);
-        throw new Error(`Cannot access bucket ${bucket}: ${bucketError.message}`);
-      }
-
-      // Upload the file
+      // No need to check bucket - just try to upload directly
+      // Upload the file with upsert enabled to handle existing files
       const { data, error } = await supabase.storage
-        .from(bucket)
-        .upload(fileName, file, {
+        .from(bucketName)
+        .upload(filePath, file, {
           cacheControl: '3600',
-          upsert: false
+          upsert: true,
+          contentType: file.type
         });
 
       if (error) {
         console.error('File upload error:', error);
-        
-        // If file already exists, try with upsert
-        if (error.message.includes('already exists')) {
-          console.log('File exists, trying with upsert...');
-          const { data: upsertData, error: upsertError } = await supabase.storage
-            .from(bucket)
-            .upload(fileName, file, {
-              cacheControl: '3600',
-              upsert: true
-            });
-          
-          if (upsertError) {
-            throw new Error(`Failed to upload file: ${upsertError.message}`);
-          }
-          
-          const { data: { publicUrl } } = supabase.storage
-            .from(bucket)
-            .getPublicUrl(upsertData!.path);
-
-          console.log('File uploaded successfully (upsert):', publicUrl);
-          return publicUrl;
-        }
-        
         throw new Error(`Failed to upload file: ${error.message}`);
       }
 
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from(bucket)
-        .getPublicUrl(data.path);
+      if (!data?.path) {
+        throw new Error('No file path returned after upload');
+      }
 
-      console.log('File uploaded successfully:', publicUrl);
-      return publicUrl;
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from(bucketName)
+        .getPublicUrl(data.path);
+        
+      if (!urlData?.publicUrl) {
+        throw new Error('Failed to generate public URL for uploaded file');
+      }
+
+      console.log('File uploaded successfully:', urlData.publicUrl);
+      return urlData.publicUrl;
     } catch (error) {
       console.error('Exception in uploadFile:', error);
       throw error;
@@ -235,16 +233,19 @@ export class EntertainmentService {
   }
 
   static async deleteFile(
-    bucket: 'entertainment-media' | 'entertainment-covers', 
+    folder: 'media' | 'covers',
     fileName: string
   ): Promise<void> {
     try {
-      console.log(`Deleting file from ${bucket}:`, fileName);
+      const bucketName = 'entertainment_media';
+      const filePath = `${folder}/${fileName}`;
+      
+      console.log(`Deleting file from ${bucketName}/${folder}:`, fileName);
       
       // List files to verify it exists
       const { data: files, error: listError } = await supabase.storage
-        .from(bucket)
-        .list('', { search: fileName });
+        .from(bucketName)
+        .list(folder, { search: fileName });
 
       if (listError) {
         console.error('Error listing files:', listError);
@@ -254,8 +255,8 @@ export class EntertainmentService {
 
       // Delete the file
       const { error } = await supabase.storage
-        .from(bucket)
-        .remove([fileName]);
+        .from(bucketName)
+        .remove([filePath]);
 
       if (error) {
         console.error('File deletion error:', error);
@@ -285,9 +286,10 @@ export class EntertainmentService {
 
   static async calculateStorageUsed(): Promise<number> {
     try {
+      const bucketName = 'entertainment_media';
       const [mediaSize, coversSize] = await Promise.all([
-        this.getBucketSize('entertainment-media'),
-        this.getBucketSize('entertainment-covers')
+        this.getFolderSize(bucketName, 'media'),
+        this.getFolderSize(bucketName, 'covers')
       ]);
 
       const totalSizeGB = (mediaSize + coversSize) / (1024 * 1024 * 1024);
@@ -298,22 +300,22 @@ export class EntertainmentService {
     }
   }
 
-  private static async getBucketSize(bucketName: string): Promise<number> {
+  private static async getFolderSize(bucketName: string, folder: string): Promise<number> {
     try {
       const { data, error } = await supabase.storage
         .from(bucketName)
-        .list();
+        .list(folder);
 
       if (error) {
-        console.error(`Error listing bucket ${bucketName}:`, error);
+        console.error(`Error listing bucket ${bucketName}/${folder}:`, error);
         return 0;
       }
       
       const size = data?.reduce((total, file) => total + (file.metadata?.size || 0), 0) || 0;
-      console.log(`Bucket ${bucketName} size:`, size, 'bytes');
+      console.log(`Bucket ${bucketName}/${folder} size:`, size, 'bytes');
       return size;
     } catch (error) {
-      console.error(`Exception getting size for bucket ${bucketName}:`, error);
+      console.error(`Exception getting size for bucket ${bucketName}/${folder}:`, error);
       return 0;
     }
   }

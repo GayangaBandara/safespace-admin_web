@@ -326,7 +326,6 @@ export type Database = {
           created_at: string
           description: string | null
           dominant_state: string | null
-          duration: string
           id: number
           media_file_url: string | null
           mood_states: string[]
@@ -334,7 +333,6 @@ export type Database = {
           title: string
           type: string
           updated_at: string
-          views: number
         }
         Insert: {
           category: string
@@ -342,7 +340,6 @@ export type Database = {
           created_at?: string
           description?: string | null
           dominant_state?: string | null
-          duration: string
           id?: number
           media_file_url?: string | null
           mood_states?: string[]
@@ -350,7 +347,6 @@ export type Database = {
           title: string
           type: string
           updated_at?: string
-          views?: number
         }
         Update: {
           category?: string
@@ -358,7 +354,6 @@ export type Database = {
           created_at?: string
           description?: string | null
           dominant_state?: string | null
-          duration?: string
           id?: number
           media_file_url?: string | null
           mood_states?: string[]
@@ -366,7 +361,6 @@ export type Database = {
           title?: string
           type?: string
           updated_at?: string
-          views?: number
         }
         Relationships: []
       }

@@ -32,7 +32,17 @@ const EntertainmentManagement = () => {
     mediaFile: null as File | null,
     coverFile: null as File | null,
   });
+  const [formDataEdit, setFormDataEdit] = useState({
+    title: '',
+    type: 'Video' as 'Video' | 'Audio',
+    description: '',
+    category: '',
+    mood_states: [] as string[],
+    status: 'active' as 'active' | 'inactive',
+  });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [formErrorsEdit, setFormErrorsEdit] = useState<Record<string, string>>({});
+  const [updating, setUpdating] = useState(false);
 
   // Categories based on type
   const videoCategories = [
@@ -125,6 +135,15 @@ const EntertainmentManagement = () => {
 
   const handleEditEntertainment = (item: EntertainmentItem) => {
     setEditingItem(item);
+    setFormDataEdit({
+      title: item.title,
+      type: item.type as 'Video' | 'Audio',
+      description: item.description || '',
+      category: item.category,
+      mood_states: [...item.mood_states],
+      status: item.status as 'active' | 'inactive',
+    });
+    setFormErrorsEdit({});
     setShowEditModal(true);
   };
 
@@ -137,15 +156,17 @@ const handleDeleteEntertainment = async (id: number, mediaFileUrl: string | null
   try {
     // Delete files from storage first
     if (mediaFileUrl) {
+      // Extract filename from URL path (entertainment_media/media/filename.mp4 -> filename.mp4)
       const fileName = mediaFileUrl.split('/').pop();
       if (fileName) {
-        await EntertainmentService.deleteFile('entertainment-media', fileName);
+        await EntertainmentService.deleteFile('media', fileName);
       }
     }
     if (coverImgUrl) {
+      // Extract filename from URL path (entertainment_media/covers/filename.jpg -> filename.jpg)
       const fileName = coverImgUrl.split('/').pop();
       if (fileName) {
-        await EntertainmentService.deleteFile('entertainment-covers', fileName);
+        await EntertainmentService.deleteFile('covers', fileName);
       }
     }
 
@@ -198,13 +219,13 @@ const handleDeleteEntertainment = async (id: number, mediaFileUrl: string | null
       // Upload media file
       if (formData.mediaFile) {
         const mediaFileName = `${Date.now()}_${formData.mediaFile.name}`;
-        mediaUrl = await EntertainmentService.uploadFile('entertainment-media', formData.mediaFile, mediaFileName);
+        mediaUrl = await EntertainmentService.uploadFile('media', formData.mediaFile, mediaFileName);
       }
 
       // Upload cover image
       if (formData.coverFile) {
         const coverFileName = `${Date.now()}_${formData.coverFile.name}`;
-        coverUrl = await EntertainmentService.uploadFile('entertainment-covers', formData.coverFile, coverFileName);
+        coverUrl = await EntertainmentService.uploadFile('covers', formData.coverFile, coverFileName);
       }
 
       // Create entertainment record
@@ -244,6 +265,56 @@ const handleDeleteEntertainment = async (id: number, mediaFileUrl: string | null
     }));
     if (formErrors.mood_states) {
       setFormErrors(prev => ({ ...prev, mood_states: '' }));
+    }
+  };
+
+  const handleMoodStateChangeEdit = (moodState: string, checked: boolean) => {
+    setFormDataEdit(prev => ({
+      ...prev,
+      mood_states: checked
+        ? [...prev.mood_states, moodState]
+        : prev.mood_states.filter(state => state !== moodState)
+    }));
+    if (formErrorsEdit.mood_states) {
+      setFormErrorsEdit(prev => ({ ...prev, mood_states: '' }));
+    }
+  };
+
+  const validateEditForm = () => {
+    const errors: Record<string, string> = {};
+
+    if (!formDataEdit.title.trim()) errors.title = 'Title is required';
+    if (!formDataEdit.category.trim()) errors.category = 'Category is required';
+    if (formDataEdit.mood_states.length === 0) errors.mood_states = 'At least one mood state is required';
+
+    setFormErrorsEdit(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleEditFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!validateEditForm() || !editingItem) return;
+
+    setUpdating(true);
+    try {
+      await EntertainmentService.updateEntertainment(editingItem.id, {
+        title: formDataEdit.title,
+        type: formDataEdit.type,
+        description: formDataEdit.description,
+        category: formDataEdit.category,
+        mood_states: formDataEdit.mood_states,
+        status: formDataEdit.status,
+      });
+
+      setShowEditModal(false);
+      setEditingItem(null);
+      await fetchData(); // Refresh the list
+    } catch (error) {
+      console.error('Error updating entertainment:', error);
+      setError('Failed to update entertainment item');
+    } finally {
+      setUpdating(false);
     }
   };
 
@@ -762,33 +833,134 @@ const handleDeleteEntertainment = async (id: number, mediaFileUrl: string | null
 
       {showEditModal && editingItem && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-11/12 max-w-2xl shadow-lg rounded-md bg-white">
+          <div className="relative top-20 mx-auto p-5 border w-11/12 max-w-4xl shadow-lg rounded-md bg-white max-h-[90vh] overflow-y-auto">
             <div className="mt-3">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Edit Entertainment</h3>
-              <p className="text-sm text-gray-500 mb-4">
-                Edit functionality will allow updating type, category, mood states, and status.
-                Changes will automatically sync with the database.
-              </p>
-              <div className="flex justify-end space-x-3">
-                <button
-                  onClick={() => {
-                    setShowEditModal(false);
-                    setEditingItem(null);
-                  }}
-                  className="btn-secondary"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => {
-                    setShowEditModal(false);
-                    setEditingItem(null);
-                  }}
-                  className="btn-primary"
-                >
-                  Save Changes
-                </button>
-              </div>
+              <h3 className="text-lg font-medium text-gray-900 mb-6">Edit Entertainment</h3>
+
+              <form onSubmit={handleEditFormSubmit} className="space-y-6">
+                {/* Basic Information */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Title *</label>
+                    <input
+                      type="text"
+                      value={formDataEdit.title}
+                      onChange={(e) => setFormDataEdit(prev => ({ ...prev, title: e.target.value }))}
+                      className={`input-field ${formErrorsEdit.title ? 'border-red-500' : ''}`}
+                      placeholder="Enter entertainment title"
+                    />
+                    {formErrorsEdit.title && <p className="text-red-500 text-xs mt-1">{formErrorsEdit.title}</p>}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Type *</label>
+                    <select
+                      value={formDataEdit.type}
+                      onChange={(e) => setFormDataEdit(prev => ({ ...prev, type: e.target.value as 'Video' | 'Audio' }))}
+                      className="input-field"
+                    >
+                      <option value="Video">Video</option>
+                      <option value="Audio">Audio</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                  <textarea
+                    value={formDataEdit.description}
+                    onChange={(e) => setFormDataEdit(prev => ({ ...prev, description: e.target.value }))}
+                    className="input-field"
+                    rows={3}
+                    placeholder="Enter description (optional)"
+                  />
+                </div>
+
+                {/* Category */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Category *</label>
+                  <select
+                    value={formDataEdit.category}
+                    onChange={(e) => setFormDataEdit(prev => ({ ...prev, category: e.target.value }))}
+                    className={`input-field ${formErrorsEdit.category ? 'border-red-500' : ''}`}
+                  >
+                    <option value="">Select a category</option>
+                    {allCategories.map(category => (
+                      <option key={category} value={category}>{category}</option>
+                    ))}
+                  </select>
+                  {formErrorsEdit.category && <p className="text-red-500 text-xs mt-1">{formErrorsEdit.category}</p>}
+                </div>
+
+                {/* Status */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Status *</label>
+                  <select
+                    value={formDataEdit.status}
+                    onChange={(e) => setFormDataEdit(prev => ({ ...prev, status: e.target.value as 'active' | 'inactive' }))}
+                    className="input-field"
+                  >
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                </div>
+
+                {/* Mood States */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Mood States *</label>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                    {[
+                      'Neutral/Calm',
+                      'Happy/Positive',
+                      'Depressed/Sad',
+                      'Stressed/Anxious',
+                      'Angry/Frustrated',
+                      'Excited/Energetic',
+                      'Confused/Uncertain',
+                      'Mixed/No Clear Pattern'
+                    ].map(state => (
+                      <label key={state} className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          checked={formDataEdit.mood_states.includes(state)}
+                          onChange={(e) => handleMoodStateChangeEdit(state, e.target.checked)}
+                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <span className="text-sm text-gray-700">{state}</span>
+                      </label>
+                    ))}
+                  </div>
+                  {formErrorsEdit.mood_states && <p className="text-red-500 text-xs mt-1">{formErrorsEdit.mood_states}</p>}
+                </div>
+
+                {/* Form Actions */}
+                <div className="flex justify-end space-x-3 pt-4 border-t">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowEditModal(false);
+                      setEditingItem(null);
+                    }}
+                    className="btn-secondary"
+                    disabled={updating}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn-primary flex items-center space-x-2"
+                    disabled={updating}
+                  >
+                    {updating && (
+                      <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                    )}
+                    <span>{updating ? 'Updating...' : 'Save Changes'}</span>
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         </div>
