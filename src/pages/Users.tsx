@@ -40,7 +40,7 @@ const Users = () => {
         total: data.total,
         active: data.patients, // Patients count as active
         inactive: data.doctors, // Doctors count as inactive (different app)
-        suspended: 0, // No suspended users in roles table
+        suspended: data.admins, // Admins count
         recentRegistrations: data.total // All roles are recent registrations
       });
     } catch (error) {

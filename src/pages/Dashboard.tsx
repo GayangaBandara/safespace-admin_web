@@ -316,19 +316,6 @@ const Dashboard = () => {
           </ResponsiveContainer>
         </div>
       </div>
-
-      {/* Database Source Info */}
-      <div className="card-shadow p-4">
-        <div className="text-xs text-gray-500">
-          <p><strong>Data Sources:</strong></p>
-          <ul className="mt-1 space-y-1">
-            <li>• Users & Roles: <code>user_roles</code> table (primary source)</li>
-            <li>• Doctors: <code>doctors</code> table (fallback to role data)</li>
-            <li>• Appointments: <code>appointments</code> table</li>
-            <li>• Reports: <code>mental_state_reports</code> table</li>
-          </ul>
-        </div>
-      </div>
     </div>
   );
 };
