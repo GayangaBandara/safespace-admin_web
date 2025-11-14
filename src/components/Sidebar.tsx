@@ -23,6 +23,7 @@ const navigation = [
   { name: 'Entertainment', href: '/entertainment', icon: PlayIcon },
   { name: 'Reports', href: '/reports', icon: ClipboardIcon },
   { name: 'Analytics', href: '/analytics', icon: ChartBarIcon },
+  { name: 'My Profile', href: '/profile', icon: UserCircleIcon },
 ];
 
 // Define admin-specific navigation items

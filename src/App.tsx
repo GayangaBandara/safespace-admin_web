@@ -12,6 +12,7 @@ import NewDoctor from './pages/NewDoctor';
 import EntertainmentManagement from './pages/Entertainment';
 import Reports from './pages/Reports';
 import Analytics from './pages/Analytics';
+import AdminProfile from './pages/AdminProfile';
 
 function App() {
   return (
@@ -30,6 +31,7 @@ function App() {
             <Route path="entertainment" element={<EntertainmentManagement />} />
             <Route path="reports" element={<Reports />} />
             <Route path="analytics" element={<Analytics />} />
+            <Route path="profile" element={<AdminProfile />} />
             <Route path="admin/add" element={<AddNewAdmin />} />
             <Route path="admin/manage" element={<ManageAdmins />} />
             <Route path="admin/roles" element={<AdminManagement />} />
