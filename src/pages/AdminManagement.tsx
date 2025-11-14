@@ -13,7 +13,6 @@ const AdminManagement = () => {
     doctors: 0,
     admins: 0
   });
-  const [savingRoles, setSavingRoles] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     fetchUserRoles();
@@ -60,31 +59,7 @@ const AdminManagement = () => {
     filterUserRoles();
   }, [filterUserRoles]);
 
-  const handleRoleUpdate = async (userId: string, newRole: 'patient' | 'doctor' | 'admin') => {
-    try {
-      setSavingRoles(prev => new Set(prev).add(userId));
-      await UserRolesService.updateUserRole(userId, newRole);
-      
-      // Update local state
-      setUserRoles(prevRoles => 
-        prevRoles.map(role => 
-          role.user_id === userId 
-            ? { ...role, role: newRole }
-            : role
-        )
-      );
-      
-      await fetchStats();
-    } catch (error) {
-      setError(error instanceof Error ? error.message : 'Failed to update user role');
-    } finally {
-      setSavingRoles(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(userId);
-        return newSet;
-      });
-    }
-  };
+
 
   const getRoleBadge = (role: string) => {
     const roleConfig = {
@@ -306,9 +281,6 @@ const AdminManagement = () => {
                       Current Role
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Change Role
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Created
                     </th>
                   </tr>
@@ -328,18 +300,6 @@ const AdminManagement = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         {getRoleBadge(role.role)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <select
-                          value={role.role}
-                          onChange={(e) => handleRoleUpdate(role.user_id, e.target.value as 'patient' | 'doctor' | 'admin')}
-                          disabled={savingRoles.has(role.user_id)}
-                          className="text-xs border border-gray-300 rounded px-2 py-1 disabled:opacity-50"
-                        >
-                          <option value="patient">Patient (Main App)</option>
-                          <option value="doctor">Doctor (Doctor App)</option>
-                          <option value="admin">Admin (Admin Web)</option>
-                        </select>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {new Date(role.created_at).toLocaleDateString()}
