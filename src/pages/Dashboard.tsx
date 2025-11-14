@@ -107,12 +107,13 @@ const Dashboard = () => {
             async () => {
               try {
                 const { count, error } = await supabase
-                  .from('pending_appointments')
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  .from('appointments' as any)
                   .select('*', { count: 'exact' });
                 if (error) throw error;
                 return count || 0;
               } catch (error) {
-                console.warn('Pending appointments table not accessible:', error);
+                console.warn('Appointments table not accessible:', error);
                 return 0;
               }
             },
@@ -223,7 +224,7 @@ const Dashboard = () => {
               <div className="ml-4">
                 <dt className="text-sm font-medium text-gray-500 truncate">Total Appointments</dt>
                 <dd className="text-2xl font-bold text-gray-900">{stats.totalAppointments}</dd>
-                <dd className="text-xs text-gray-400">From pending_appointments table</dd>
+                <dd className="text-xs text-gray-400">From appointments table</dd>
               </div>
             </div>
           </div>
@@ -323,7 +324,7 @@ const Dashboard = () => {
           <ul className="mt-1 space-y-1">
             <li>• Users & Roles: <code>user_roles</code> table (primary source)</li>
             <li>• Doctors: <code>doctors</code> table (fallback to role data)</li>
-            <li>• Appointments: <code>pending_appointments</code> table</li>
+            <li>• Appointments: <code>appointments</code> table</li>
             <li>• Reports: <code>mental_state_reports</code> table</li>
           </ul>
         </div>
