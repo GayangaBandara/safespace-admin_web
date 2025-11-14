@@ -30,7 +30,6 @@ function App() {
             <Route path="entertainment" element={<EntertainmentManagement />} />
             <Route path="reports" element={<Reports />} />
             <Route path="analytics" element={<Analytics />} />
-            <Route path="settings" element={<div>Settings Page Coming Soon</div>} />
             <Route path="admin/add" element={<AddNewAdmin />} />
             <Route path="admin/manage" element={<ManageAdmins />} />
             <Route path="admin/roles" element={<AdminManagement />} />

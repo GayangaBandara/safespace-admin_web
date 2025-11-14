@@ -19,7 +19,7 @@ import {
 
 interface ChartData {
   type: 'bar' | 'pie' | 'line' | 'area';
-  data: unknown[];
+  data: (Record<string, string | number> & { color?: string })[];
   dataKey: string;
   xAxisKey?: string;
   title: string;
@@ -260,7 +260,7 @@ const Analytics = () => {
       const pieData = Object.entries(analyticsData.mentalStateBreakdown).map(([name, value]) => ({
         name: name.charAt(0).toUpperCase() + name.slice(1),
         value,
-        color: name === 'anxiety' ? '#EF4444' : name === 'depression' ? '#6B7280' : name === 'stress' ? '#F59E0B' : '#10B981'
+        color: name.toLowerCase() === 'anxiety' ? '#EF4444' : name.toLowerCase() === 'depression' ? '#6B7280' : name.toLowerCase() === 'stress' ? '#F59E0B' : '#10B981'
       }));
 
       return {
@@ -441,8 +441,7 @@ const Analytics = () => {
       case 'bar':
         return (
           <ResponsiveContainer width="100%" height={200}>
-            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-            <BarChart data={chart.data as any}>
+            <BarChart data={chart.data}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey={chart.xAxisKey} />
               <YAxis />
@@ -455,16 +454,15 @@ const Analytics = () => {
         return (
           <ResponsiveContainer width="100%" height={200}>
             <PieChart>
-              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
               <Pie
-                data={chart.data as any}
+                data={chart.data}
                 cx="50%"
                 cy="50%"
                 outerRadius={60}
                 dataKey={chart.dataKey}
                 label={({ name, percent }) => `${name} ${(percent as number * 100).toFixed(0)}%`}
               >
-                {(chart.data as Array<{ color?: string }>).map((entry, index) => (
+                {chart.data.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={entry.color || '#4f46e5'} />
                 ))}
               </Pie>
@@ -475,8 +473,7 @@ const Analytics = () => {
       case 'line':
         return (
           <ResponsiveContainer width="100%" height={200}>
-            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-            <LineChart data={chart.data as any}>
+            <LineChart data={chart.data}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey={chart.xAxisKey} />
               <YAxis />
@@ -488,8 +485,7 @@ const Analytics = () => {
       case 'area':
         return (
           <ResponsiveContainer width="100%" height={200}>
-            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-            <AreaChart data={chart.data as any}>
+            <AreaChart data={chart.data}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey={chart.xAxisKey} />
               <YAxis />

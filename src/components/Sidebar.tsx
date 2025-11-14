@@ -7,7 +7,6 @@ import {
   UserIcon,
   ClipboardIcon,
   ChartBarIcon,
-  CogIcon,
   UserPlusIcon,
   ShieldCheckIcon,
   UserCircleIcon,
@@ -24,7 +23,6 @@ const navigation = [
   { name: 'Entertainment', href: '/entertainment', icon: PlayIcon },
   { name: 'Reports', href: '/reports', icon: ClipboardIcon },
   { name: 'Analytics', href: '/analytics', icon: ChartBarIcon },
-  { name: 'Settings', href: '/settings', icon: CogIcon },
 ];
 
 // Define admin-specific navigation items
