@@ -11,6 +11,7 @@ import Doctors from './pages/Doctors';
 import NewDoctor from './pages/NewDoctor';
 import EntertainmentManagement from './pages/Entertainment';
 import Reports from './pages/Reports';
+import Analytics from './pages/Analytics';
 
 function App() {
   return (
@@ -28,7 +29,7 @@ function App() {
             <Route path="newdoctors" element={<NewDoctor />} />
             <Route path="entertainment" element={<EntertainmentManagement />} />
             <Route path="reports" element={<Reports />} />
-            <Route path="analytics" element={<div>Analytics Page Coming Soon</div>} />
+            <Route path="analytics" element={<Analytics />} />
             <Route path="settings" element={<div>Settings Page Coming Soon</div>} />
             <Route path="admin/add" element={<AddNewAdmin />} />
             <Route path="admin/manage" element={<ManageAdmins />} />
