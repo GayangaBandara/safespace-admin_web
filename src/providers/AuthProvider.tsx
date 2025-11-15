@@ -140,6 +140,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             email: session.user.email!,
             full_name: session.user.user_metadata?.full_name || null,
             role: 'moderator',
+            avatar_url: null,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
           },

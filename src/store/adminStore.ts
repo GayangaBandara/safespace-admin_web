@@ -56,6 +56,7 @@ export const useAdminStore = create<AdminState>()(
               email: authData.user.email!,
               full_name: authData.user.user_metadata?.full_name || null,
               role: 'moderator',
+              avatar_url: null,
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString()
             },
