@@ -244,46 +244,49 @@ const AdminProfile = () => {
     setErrors({});
 
     try {
-      // First, try to update the admin profile with a placeholder to test database access
-      const { error: testUpdateError } = await (supabase
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .from('admins') as any)
-        .update({ updated_at: new Date().toISOString() })
-        .eq('id', admin.id);
-
-      if (testUpdateError) {
-        throw new Error(`Database access error: ${testUpdateError.message}. Please ensure the admins table has an 'avatar_url' column.`);
-      }
-
-      // Upload to Supabase Storage
+      // Step 1: Upload to Supabase Storage
       const fileExt = avatarFile.name.split('.').pop();
       const fileName = `${admin.id}_${Date.now()}.${fileExt}`;
-      const filePath = `admin-avatars/${fileName}`;
+      const filePath = `admin-avatars/${fileName}`; // Updated filePath
 
       const { error: uploadError } = await supabase.storage
-        .from('admin-avatars')
+        .from('avatars') // Correct bucket name
         .upload(filePath, avatarFile);
 
       if (uploadError) {
-        // If bucket doesn't exist, provide helpful error message
         if (uploadError.message.includes('Bucket not found')) {
-          throw new Error('Storage bucket "admin-avatars" does not exist. Please create it in your Supabase dashboard under Storage > Buckets, and set it to public.');
+          throw new Error('Storage Error: Bucket "admin-avatars" not found. Please create it in your Supabase dashboard.');
+        }
+        if (uploadError.message.includes('security policy')) {
+            throw new Error(`Storage RLS Error: ${uploadError.message}. Check policies on storage.objects for the 'admin-avatars' bucket.`);
         }
         throw uploadError;
       }
 
-      // Get public URL
+      // Step 2: Get public URL with a cache-busting parameter
       const { data } = supabase.storage
-        .from('admin-avatars')
-        .getPublicUrl(filePath);
+        .from('avatars') // Correct bucket name
+        .getPublicUrl(filePath, {
+            transform: {
+                // `updated_at` is a trick to bust the cache.
+                // You can use any value that changes when the file is updated.
+                // 'tr:updated_at' is not a real transformation, but it makes the URL unique.
+                // Supabase Storage will ignore it but it will bypass the cache.
+                // For this to work, you may need to enable 'cacheControl' on your bucket to a low value like 'no-cache'
+                // or ensure your storage policies are correct.
+                // I am adding this as a precaution.
+                // The most reliable way is to make sure your state management is correct.
+                // A simpler alternative is `new Date().getTime()` as a query param.
+                // I will use that for simplicity.
+                // `?t=${new Date().getTime()}`
+            }
+        });
 
-      const avatarUrl = data.publicUrl;
+      const avatarUrl = `${data.publicUrl}?t=${new Date().getTime()}`;
 
-      // Update admin profile with avatar URL
-      // Use type assertion to bypass RLS policies for admin self-updates
-      const { error: updateError } = await (supabase
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .from('admins') as any)
+      // Step 3: Update admin profile with the new avatar URL
+      const { error: updateError } = await supabase
+        .from('admins')
         .update({
           avatar_url: avatarUrl,
           updated_at: new Date().toISOString(),
@@ -291,9 +294,11 @@ const AdminProfile = () => {
         .eq('id', admin.id);
 
       if (updateError) {
-        // If avatar_url column doesn't exist, provide helpful error message
         if (updateError.message.includes('column "avatar_url" does not exist')) {
-          throw new Error('The admins table does not have an avatar_url column. Please add this column to your database schema.');
+          throw new Error('Database Error: The "admins" table is missing the "avatar_url" column.');
+        }
+        if (updateError.message.includes('security policy')) {
+            throw new Error(`Database RLS Error: ${updateError.message}. Check the UPDATE policy on the 'admins' table.`);
         }
         throw updateError;
       }
@@ -301,7 +306,7 @@ const AdminProfile = () => {
       // Refresh admin data
       await fetchAdminProfile();
 
-      // Log the action (optional - won't fail if audit_logs table doesn't exist)
+      // Log the action
       try {
         await supabase.from('audit_logs').insert({
           admin_id: admin.id,
@@ -403,7 +408,7 @@ const AdminProfile = () => {
                     <div className="flex items-center space-x-4">
                       <div className="relative">
                         <img
-                          src={avatarPreview || (admin && 'avatar_url' in admin ? (admin as any).avatar_url : null) || `https://ui-avatars.com/api/?name=${encodeURIComponent(admin?.full_name || admin?.email || 'Admin')}&background=4f46e5&color=fff&size=80`} // eslint-disable-line @typescript-eslint/no-explicit-any
+                          src={avatarPreview || admin?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(admin?.full_name || admin?.email || 'Admin')}&background=4f46e5&color=fff&size=80`}
                           alt="Avatar preview"
                           className="w-20 h-20 rounded-full object-cover border-2 border-gray-200"
                         />
@@ -440,13 +445,9 @@ const AdminProfile = () => {
                         <div className="text-xs text-gray-500 mt-1">
                           <p>JPG, PNG or GIF. Max size 5MB.</p>
                           {errors.avatar && (
-                            <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-red-700">
-                              <p className="font-medium">Setup Required:</p>
-                              <ul className="mt-1 list-disc list-inside space-y-1">
-                                <li>Create a storage bucket named "admin-avatars" in Supabase</li>
-                                <li>Set the bucket to public access</li>
-                                <li>Add an "avatar_url" column to the admins table (TEXT, nullable)</li>
-                              </ul>
+                            <div className="mt-2 p-3 bg-red-50 border border-red-300 rounded-md text-red-800">
+                              <p className="font-semibold text-sm">Upload Error:</p>
+                              <p className="text-xs mt-1">{errors.avatar}</p>
                             </div>
                           )}
                         </div>
@@ -492,7 +493,7 @@ const AdminProfile = () => {
                 <div className="space-y-4">
                   <div className="flex items-center space-x-4">
                     <img
-                      src={(admin && 'avatar_url' in admin ? (admin as any).avatar_url : null) || `https://ui-avatars.com/api/?name=${encodeURIComponent(admin?.full_name || admin?.email || 'Admin')}&background=4f46e5&color=fff&size=64`} // eslint-disable-line @typescript-eslint/no-explicit-any
+                      src={admin?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(admin?.full_name || admin?.email || 'Admin')}&background=4f46e5&color=fff&size=64`}
                       alt="Profile avatar"
                       className="h-16 w-16 rounded-full object-cover border-2 border-gray-200"
                     />

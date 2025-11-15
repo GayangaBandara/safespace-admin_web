@@ -32,7 +32,15 @@ const Navbar = () => {
           {/* Profile dropdown */}
           <Menu as="div" className="ml-3 relative">
             <Menu.Button className="max-w-xs bg-white flex items-center text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 hover:ring-2 hover:ring-offset-2 hover:ring-indigo-300 transition-all duration-200">
-              <UserCircleIcon className="h-8 w-8 text-gray-400" />
+              {admin?.avatar_url ? (
+                <img
+                  className="h-8 w-8 rounded-full object-cover"
+                  src={admin.avatar_url}
+                  alt="Admin avatar"
+                />
+              ) : (
+                <UserCircleIcon className="h-8 w-8 text-gray-400" />
+              )}
             </Menu.Button>
             <Transition
               as={Fragment}
